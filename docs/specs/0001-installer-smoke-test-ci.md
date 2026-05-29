@@ -1,10 +1,12 @@
 ---
 id: 0001
 title: installer-smoke-test-ci
-status: draft
+status: implemented
 author: durden
 created: 2026-05-30
 ---
+
+> **Implemented 2026-05-30** (dogfood run of `/prd-pipeline`). Shipped: `tests/smoke.sh` (48 assertions, isolated temp envs, BSD+GNU portable) + `.github/workflows/ci.yml` (ubuntu+macos matrix). **Scope addition beyond the plan:** the smoke test surfaced a `bin/prd` refresh idempotency bug (blank-line accumulation); fixed it (2-line awk trailing-blank strip) and the test now asserts whole-file steady state. `bash tests/smoke.sh` → exit 0.
 
 # Installer smoke-test + CI
 
