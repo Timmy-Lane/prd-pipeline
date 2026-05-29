@@ -1,55 +1,146 @@
 #!/usr/bin/env bash
-# prd — installer for the prd-pipeline Claude Code skill + rule.
-# Pure bash, no dependencies. Deploys this repo's skill/rule into ~/.claude/.
+# prd — installer/manager for the prd-pipeline Claude Code skill + rule.
+# Pure bash, no dependencies. Idempotent. macOS + Linux.
+#
+#   prd install                 install globally into ~/.claude (skill + rule + CLAUDE.md wiring + PATH)
+#   prd install --project DIR   install just the skill into DIR/.claude/skills (commit with the repo)
+#   prd update                  git pull (if a clone) + reinstall
+#   prd uninstall               remove skill, rule, CLAUDE.md block, and the prd symlink
+#   prd doctor                  show install status
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 SKILLS_DST="$CLAUDE_HOME/skills"
 RULES_DST="$CLAUDE_HOME/rules/common"
+CLAUDE_MD="$CLAUDE_HOME/CLAUDE.md"
+BIN_DST="${PRD_BIN_DIR:-$HOME/.local/bin}"
+MARK_START="<!-- prd-pipeline:start (managed by \`prd install\` — do not edit inside) -->"
+MARK_END="<!-- prd-pipeline:end -->"
 
-c_green() { printf '\033[32m%s\033[0m\n' "$1"; }
-c_dim()   { printf '\033[2m%s\033[0m\n' "$1"; }
+green(){ printf '\033[32m%s\033[0m\n' "$1"; }
+dim(){ printf '\033[2m%s\033[0m\n' "$1"; }
+err(){ printf '\033[31m%s\033[0m\n' "$1" >&2; }
 
-cmd_install() {
+block_text(){
+  cat <<EOF
+$MARK_START
+## prd-pipeline (feature workflow)
+
+\`/prd-pipeline\` — tier-routed entry point for any *build / add / implement*: spec/PRD → adversarial grill → confirmed plan-gate → parallel worktree build → verify → ship. Always start from \`main\`; the work auto-branches into isolated worktrees; you never switch branches. Always-on norm: \`rules/common/feature-workflow.md\`.
+$MARK_END
+EOF
+}
+
+wire_claude_md(){
+  mkdir -p "$CLAUDE_HOME"
+  if [ ! -f "$CLAUDE_MD" ]; then
+    block_text > "$CLAUDE_MD"; dim "  created $CLAUDE_MD with prd-pipeline block"; return
+  fi
+  if grep -qF "prd-pipeline:start" "$CLAUDE_MD" && grep -qF "prd-pipeline:end" "$CLAUDE_MD"; then
+    awk 'BEGIN{s=0} /^<!-- prd-pipeline:start/{s=1} s==0{print} /^<!-- prd-pipeline:end -->/{s=0}' "$CLAUDE_MD" > "$CLAUDE_MD.tmp"
+    printf '\n' >> "$CLAUDE_MD.tmp"; block_text >> "$CLAUDE_MD.tmp"
+    mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"; dim "  refreshed prd-pipeline block in CLAUDE.md"
+  elif grep -qF "prd-pipeline:start" "$CLAUDE_MD"; then
+    err "  WARNING: prd-pipeline:start present but :end marker missing — skipping CLAUDE.md edit to avoid truncation; fix the markers by hand"
+  elif grep -qF "prd-pipeline" "$CLAUDE_MD"; then
+    dim "  CLAUDE.md already mentions prd-pipeline (manual wiring) — left untouched"
+  else
+    printf '\n' >> "$CLAUDE_MD"; block_text >> "$CLAUDE_MD"; dim "  appended prd-pipeline block to CLAUDE.md"
+  fi
+}
+
+symlink_cli(){
+  mkdir -p "$BIN_DST"
+  ln -sf "$REPO_ROOT/bin/prd" "$BIN_DST/prd"
+  case ":$PATH:" in
+    *":$BIN_DST:"*) : ;;
+    *) dim "  note: $BIN_DST is not on PATH — add it, or call $BIN_DST/prd directly" ;;
+  esac
+}
+
+cmd_install_global(){
   mkdir -p "$SKILLS_DST" "$RULES_DST"
+  rm -rf "$SKILLS_DST/prd-pipeline"
   cp -R "$REPO_ROOT/skills/prd-pipeline" "$SKILLS_DST/"
   cp "$REPO_ROOT/rules/feature-workflow.md" "$RULES_DST/feature-workflow.md"
-  c_green "installed:"
-  echo "  skill → $SKILLS_DST/prd-pipeline/  (invoke with /prd-pipeline)"
-  echo "  rule  → $RULES_DST/feature-workflow.md  (auto-loads every session)"
-  echo
-  c_dim "Add this row to your global ~/.claude/CLAUDE.md tool-routing table for discoverability:"
-  echo '  | Build/add/implement feature | `/prd-pipeline` — tier-routed: spec → grill → confirmed plan → parallel worktree build → verify → ship |'
+  wire_claude_md
+  symlink_cli
+  green "prd-pipeline installed."
+  echo "  skill → $SKILLS_DST/prd-pipeline/   (invoke with /prd-pipeline)"
+  echo "  rule  → $RULES_DST/feature-workflow.md   (auto-loads every session)"
+  echo "  cli   → $BIN_DST/prd"
+  check_deps
 }
 
-cmd_update() {
-  if [ -d "$REPO_ROOT/.git" ]; then
-    git -C "$REPO_ROOT" pull --ff-only || c_dim "git pull skipped (no upstream / not ff)"
-  fi
-  cmd_install
-  c_green "updated."
+cmd_install_project(){
+  local proj="${1:-}"
+  [ -n "$proj" ] || { err "usage: prd install --project <path>"; exit 1; }
+  [ -d "$proj" ] || { err "no such directory: $proj"; exit 1; }
+  mkdir -p "$proj/.claude/skills"
+  rm -rf "$proj/.claude/skills/prd-pipeline"
+  cp -R "$REPO_ROOT/skills/prd-pipeline" "$proj/.claude/skills/"
+  green "installed prd-pipeline skill into $proj/.claude/skills/  (commit it with the repo)."
+  dim "  the feature-workflow rule stays global; project skills override global on conflict."
 }
 
-cmd_uninstall() {
+cmd_update(){
+  [ -d "$REPO_ROOT/.git" ] && { git -C "$REPO_ROOT" pull --ff-only || dim "  git pull skipped (no fast-forward / no upstream)"; }
+  cmd_install_global
+  green "updated."
+}
+
+cmd_uninstall(){
   rm -rf "$SKILLS_DST/prd-pipeline"
   rm -f "$RULES_DST/feature-workflow.md"
-  c_green "uninstalled skill + rule from $CLAUDE_HOME (your CLAUDE.md edits are left intact — remove the routing row by hand)."
+  [ -L "$BIN_DST/prd" ] && rm -f "$BIN_DST/prd"
+  if [ -f "$CLAUDE_MD" ] && grep -qF "prd-pipeline:start" "$CLAUDE_MD" && grep -qF "prd-pipeline:end" "$CLAUDE_MD"; then
+    awk 'BEGIN{s=0} /^<!-- prd-pipeline:start/{s=1} s==0{print} /^<!-- prd-pipeline:end -->/{s=0}' "$CLAUDE_MD" > "$CLAUDE_MD.tmp"
+    mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"; dim "  removed managed prd-pipeline block from CLAUDE.md"
+  fi
+  green "uninstalled (manual CLAUDE.md edits, if any, left intact)."
 }
 
-cmd_doctor() {
+# Check the skills/tools prd-pipeline composes. git is REQUIRED (worktrees);
+# the rest have built-in fallbacks but give the best experience when present.
+check_deps(){
+  echo "  dependencies:"
+  if command -v git >/dev/null 2>&1; then green "    git            ok  (REQUIRED — worktree mandate)"; else err "    git            MISSING — REQUIRED for the worktree build; install git"; fi
+  if grep -qsE '"superpowers@[^"]*": *true' "$CLAUDE_HOME/settings.json" 2>/dev/null \
+     || ls "$CLAUDE_HOME"/plugins/cache/*/superpowers/*/skills/brainstorming/SKILL.md >/dev/null 2>&1; then
+    green "    superpowers    ok  (brainstorming · writing-plans · dispatching-parallel-agents · TDD · verification · finishing-a-branch)"
+  else
+    dim  "    superpowers    missing — install the 'superpowers' plugin for the best composer; prd-pipeline still runs with built-in fallbacks"
+  fi
+  if find "$CLAUDE_HOME" -type d -iname deep-research 2>/dev/null | grep -q .; then
+    green "    deep-research  ok  (research / grill engine)"
+  else
+    dim  "    deep-research  missing — falls back to the deep-researcher agent / web tools"
+  fi
+}
+
+cmd_doctor(){
   echo "prd-pipeline doctor"
-  echo "  repo:         $REPO_ROOT"
-  echo "  claude home:  $CLAUDE_HOME"
-  [ -f "$SKILLS_DST/prd-pipeline/SKILL.md" ] && c_green "  skill:        installed" || echo "  skill:        NOT installed (run: prd install)"
-  [ -f "$RULES_DST/feature-workflow.md" ]    && c_green "  rule:         installed" || echo "  rule:         NOT installed (run: prd install)"
-  command -v git >/dev/null 2>&1 && c_green "  git:          found" || echo "  git:          MISSING (worktree mandate needs git)"
+  echo "  repo:        $REPO_ROOT"
+  echo "  claude home: $CLAUDE_HOME"
+  [ -f "$SKILLS_DST/prd-pipeline/SKILL.md" ] && green "  skill:       installed" || echo "  skill:       NOT installed (run: prd install)"
+  [ -f "$RULES_DST/feature-workflow.md" ]    && green "  rule:        installed" || echo "  rule:        NOT installed (run: prd install)"
+  if [ -f "$CLAUDE_MD" ] && grep -qiF "prd-pipeline" "$CLAUDE_MD"; then green "  CLAUDE.md:   wired"; else echo "  CLAUDE.md:   not wired"; fi
+  [ -L "$BIN_DST/prd" ] && green "  cli on PATH: $BIN_DST/prd" || echo "  cli on PATH: no symlink (run: prd install)"
+  check_deps
 }
 
-case "${1:-}" in
-  install)   cmd_install ;;
-  update)    cmd_update ;;
-  uninstall) cmd_uninstall ;;
-  doctor)    cmd_doctor ;;
-  *) echo "usage: prd {install|update|uninstall|doctor}"; exit 1 ;;
-esac
+main(){
+  local sub="${1:-}"; shift || true
+  case "$sub" in
+    install)
+      if [ "${1:-}" = "--project" ]; then cmd_install_project "${2:-}"; else cmd_install_global; fi ;;
+    update)    cmd_update ;;
+    uninstall) cmd_uninstall ;;
+    doctor)    cmd_doctor ;;
+    ""|-h|--help|help)
+      echo "usage: prd {install [--project DIR] | update | uninstall | doctor}" ;;
+    *) err "unknown command: $sub"; echo "usage: prd {install [--project DIR] | update | uninstall | doctor}"; exit 1 ;;
+  esac
+}
+main "$@"

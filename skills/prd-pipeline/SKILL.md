@@ -29,6 +29,8 @@ plan before code touches disk.** Everything else serves that.
 
 ## Step 0 — Load project context + seed todos (always)
 
+**Preflight — verify dependencies first.** This skill composes others; confirm they're available before running (scan your available-skills list + tools). **`git` is a hard requirement** (the worktree build needs it) — if absent, STOP and tell the user. The **superpowers** skills (`brainstorming`, `writing-plans`, `dispatching-parallel-agents`, `subagent-driven-development`, `test-driven-development`, `verification-before-completion`, `finishing-a-development-branch`) and a **research engine** (`deep-research`, else the `deep-researcher` agent) are strongly recommended — for any that's missing, warn the user once ("install the superpowers plugin for the best experience") and use the inline fallback from the Composition map. The native `Agent(isolation:"worktree")` is always present in Claude Code. Surface gaps up front; never fail silently mid-run. (`prd doctor` runs the same check from the shell.)
+
 1. **Read the project's `CLAUDE.md`** (repo root). Extract, with fallbacks:
    - **Spec directory + template** — where specs/PRDs live (e.g. `docs/prd/`, `docs/rfd/`,
      `docs/specs/`) and the template path. *Fallback:* `docs/specs/NNNN-kebab-title.md` +

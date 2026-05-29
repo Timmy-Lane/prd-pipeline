@@ -1,6 +1,6 @@
 # prd-pipeline
 
-A portable, tier-adaptive **feature-development pipeline** for Claude Code: idea → spec/PRD → adversarial grill → confirmed plan → parallel worktree build → verified ship. Drops into any repo. Pure Skill + Agent + git — **no binary, no service, no dependency.**
+A portable, tier-adaptive **feature-development pipeline** for Claude Code: idea → spec/PRD → adversarial grill → confirmed plan → parallel worktree build → verified ship. Drops into any repo. Pure Skill + Agent + git — **no binary, no service, no runtime dependency.**
 
 Inspired by the *architecture* of [bad-research](https://github.com/LeventySeven/badresearch) (tier routing, an editable plan-gate, adversarial critic fan-out, a compaction-resistant skill, a strict subagent contract) — but it composes Claude Code's native skills and git worktrees instead of shipping its own engine.
 
@@ -18,42 +18,70 @@ Inspired by the *architecture* of [bad-research](https://github.com/LeventySeven
 
 Unsure → route up, never reflexively to T2.
 
-## Parallel agents in git worktrees (you never switch branches)
+## Parallel agents in git worktrees — you stay on `main`, work auto-branches
 
-- ≥2 independent tasks ⇒ one `Agent(isolation:"worktree")` each — its own worktree + branch under `.claude/worktrees/`, plan/memory/hooks attached to the worktree, not your repo.
-- **Your working tree never moves.** The orchestrator `git merge`s each agent's branch back — never `git checkout` your tree.
-- **Disjoint-file partition** (from the plan) makes merges conflict-free; cross-cutting edits serialize after the parallel block.
-- **Cleanup is part of the task:** after merge, `git worktree remove` + delete the branch. 4–8 concurrent cap.
+- **Always start from `main`.** For a feature, the pipeline auto-creates an independent feature branch in its own git worktree and works there — `main` stays clean and usable the whole time. You never `git checkout`, never manually branch.
+- **≥2 independent sub-tasks ⇒ parallelize.** One `Agent(isolation:"worktree")` per task — its own worktree+branch; plan/memory/hooks attach to the worktree, not your repo; auto-cleans if unchanged.
+- **Merge inward; touch `main` only at ship.** Sub-task branches merge into the feature branch (disjoint-file partition = conflict-free); the feature branch lands on `main` only at the deliberate ship step. `main` is never half-built.
+- **Cleanup is part of the task** — after merge, `git worktree remove` + delete the branch. 4–8 concurrent cap.
 
 ## Install
 
+**Recommended (review-then-install):**
+
 ```bash
-git clone <this-repo> ~/Documents/GitHub/prd-pipeline
-~/Documents/GitHub/prd-pipeline/bin/prd install
+git clone https://github.com/Timmy-Lane/prd-pipeline ~/.prd-pipeline
+less ~/.prd-pipeline/bin/prd ~/.prd-pipeline/install.sh   # inspect before running
+~/.prd-pipeline/bin/prd install
 ```
 
-`prd install` copies the skill into `~/.claude/skills/prd-pipeline/` and the always-on rule into `~/.claude/rules/common/feature-workflow.md`, then prints the one-line snippet to add to your global `~/.claude/CLAUDE.md` routing. Other commands: `prd update`, `prd uninstall`, `prd doctor`.
+**One-liner** (only do this if you trust the source — it runs a script from the internet):
 
-Then invoke it in any repo:
-
-```
-/prd-pipeline
+```bash
+curl -fsSL https://raw.githubusercontent.com/Timmy-Lane/prd-pipeline/main/install.sh | bash
 ```
 
-It reads that repo's `CLAUDE.md` for the spec directory, template, "spec-required" triggers, project skills (grill/eng-review), and invariants — falling back to sane defaults when absent. **The project's `CLAUDE.md` always wins on conflict.**
+`prd install` is idempotent and:
+- copies the skill → `~/.claude/skills/prd-pipeline/` (invoke with `/prd-pipeline`),
+- copies the rule → `~/.claude/rules/common/feature-workflow.md` (auto-loads every session),
+- inserts/refreshes a **managed block** in `~/.claude/CLAUDE.md` (between `<!-- prd-pipeline:start -->` markers — and skips if you've already wired it by hand),
+- symlinks `prd` onto `~/.local/bin`,
+- runs a **dependency check** (see below).
+
+| Command | Does |
+|---|---|
+| `prd install` | global install (above) |
+| `prd install --project DIR` | install just the skill into `DIR/.claude/skills/` (commit it with the repo) |
+| `prd update` | `git pull --ff-only` (if a clone) + reinstall |
+| `prd uninstall` | remove skill, rule, managed CLAUDE.md block, and the `prd` symlink |
+| `prd doctor` | show install status + dependency check |
+
+## Dependencies (checked by `prd doctor` and at runtime)
+
+The skill **composes** other skills and degrades gracefully when they're absent — but `prd doctor` (and the skill's own Step-0 preflight) report what's present:
+
+- **git** — *required* (the worktree build needs it).
+- **superpowers** plugin — strongly recommended (brainstorming · writing-plans · dispatching-parallel-agents · TDD · verification · finishing-a-branch). Missing → built-in inline fallbacks.
+- **deep-research** skill — research/grill engine. Missing → falls back to a `deep-researcher` agent / web tools.
 
 ## What's in here
 
 ```
 skills/prd-pipeline/
   SKILL.md                      the orchestrator (the procedure)
-  references/research-notes.md  cited best-practice synthesis (Google design docs,
-                                Amazon PR-FAQ, Rust RFC, Oxide RFD, Shape Up, pre-mortem,
-                                spec-kit/OpenSpec/BMAD, Claude Code worktrees)
+  references/research-notes.md  cited best-practice synthesis (Google design docs, Amazon
+                                PR-FAQ, Rust RFC, Oxide RFD, Shape Up, pre-mortem, spec-kit)
   references/spec-template.md   the default spec/PRD template
-rules/feature-workflow.md       the always-on global rule (gate + worktree mandate)
+rules/feature-workflow.md       the always-on rule (gate + worktree mandate)
 bin/prd                         install / update / uninstall / doctor
+install.sh                      bootstrap (clone + install)
 ```
+
+## Security / trust
+
+- **No telemetry, no phone-home, no third-party downloads.** The only network operation is `git clone` / `git pull` of *this* repo over HTTPS (pinned in `install.sh`; the `PRD_REPO_URL` override is asserted to be `https://`). Reviewed for malware/exfiltration — clean.
+- `bin/prd` only writes under `~/.claude` + `~/.local/bin`, edits a clearly-marked managed block in `CLAUDE.md` (atomic write, skips if the end-marker is missing to avoid truncation), and never uses `eval` or executes downloaded content beyond this repo's own `bin/prd`.
+- Prefer the **clone-then-inspect** install over `curl | bash`. Pin to a tagged release if you want a frozen version.
 
 ## Composes (doesn't reinvent)
 
@@ -61,7 +89,7 @@ bin/prd                         install / update / uninstall / doctor
 
 ## Credit
 
-Process canon distilled from Google's *Design Docs*, Amazon's *Working Backwards* PR-FAQ, the Rust RFC + Oxide RFD lineage, Basecamp's *Shape Up*, Gary Klein's pre-mortem, and the spec-driven-development tools (GitHub spec-kit, OpenSpec, BMAD). Sources in `references/research-notes.md`. Orchestration architecture inspired by bad-research.
+Process canon distilled from Google's *Design Docs*, Amazon's *Working Backwards* PR-FAQ, the Rust RFC + Oxide RFD lineage, Basecamp's *Shape Up*, Gary Klein's pre-mortem, and spec-driven-development tools (GitHub spec-kit, OpenSpec, BMAD). Sources in `references/research-notes.md`. Orchestration architecture inspired by bad-research.
 
 ## License
 
