@@ -45,9 +45,13 @@ plan before code touches disk.** Everything else serves that.
    - **Research engine** — the project may pin one. *Fallback:* `Skill(deep-research)` for
      synthesis and `Agent(subagent_type: deep-researcher)` for grill critics.
 2. **Classify the tier** (Step 1) from the user's request.
-3. **Seed `TodoWrite`** with the phases for the chosen tier, in order. The todo list is
-   your durable memory — it survives context compaction. Re-read this file and the spec
-   file if you wake up unsure where you are.
+3. **Seed `TodoWrite`** (or your harness's task tool — e.g. `TaskCreate`/`TaskUpdate`) with the
+   phases for the chosen tier, in order. The list is your durable memory — it survives context
+   compaction. Re-read this file and the spec file if you wake up unsure where you are.
+
+> **Run `/prd-pipeline` from *within* the target repo.** The worktree build (Step 5) uses the
+> *session's* git repo. Driving it against a different repo means managing worktrees by hand —
+> avoid it; `cd` into the repo you're building in first.
 
 ---
 
@@ -59,7 +63,7 @@ skip the gate on a one-way door.**
 
 | Tier | Trigger | Pipeline |
 |---|---|---|
-| **T0 — no spec** | Bug fix · refactor with no behavior change · docs · dep bump · prompt/threshold tweak measured against an existing eval · devops/CI. Two-way door, solution obvious. | Skip to **Step 5** (implement) → **Step 6** (verify) → review. No spec, no gate. Exit fast. |
+| **T0 — no spec** | Bug fix · refactor with no behavior change · docs · dep bump · prompt/threshold tweak measured against an existing eval · devops/CI **config**. Two-way door, solution obvious. *(A test harness or any script guarding a `curl\|bash`/release/migration path is NOT trivial devops — it earns a T1 spec.)* | Skip to **Step 5** (implement) → **Step 6** (verify) → review. No spec, no gate. Exit fast. |
 | **T1 — light spec** | Small feature · single subsystem · mostly reversible · < ~8 files, ≤2 new components. | Step 2 (one-pager spec) → Step 3 (single grill pass) → Step 4 (plan, lightweight) → **plan-gate** → Step 5 → Step 6 → ship. |
 | **T2 — full spec** | New pipeline/behavior · new DB table or column · new public API/endpoint · new external data source · cross-cutting change · **one-way door** · anything that moves user-visible outcomes. | Step 2 (full PRD) → Step 3 (adversarial grill) → Step 4 (architecture lock-in) → **editable plan-gate** → Step 5 (parallel worktree build) → Step 6 → ship. |
 
@@ -73,6 +77,8 @@ State the tier and one-line reason before proceeding.
 Run `Skill(superpowers:brainstorming)` first if intent/requirements are not already crisp
 (creating features ⇒ brainstorm before writing). Then write the spec to the project's spec
 directory at `status: draft`, using the project template (fallback: `references/spec-template.md`).
+The spec is **committed on the feature branch in Step 5** alongside the implementation, so intent
++ code reach `main` together at ship — don't commit it to `main` up front.
 
 Synthesized section skeleton (bold = always; rest = when relevant): **Problem/Context**,
 **Goals & Non-Goals**, customer-framing (working-backwards, 1 paragraph), **Proposed
