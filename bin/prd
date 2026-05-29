@@ -38,7 +38,8 @@ wire_claude_md(){
     block_text > "$CLAUDE_MD"; dim "  created $CLAUDE_MD with prd-pipeline block"; return
   fi
   if grep -qF "prd-pipeline:start" "$CLAUDE_MD" && grep -qF "prd-pipeline:end" "$CLAUDE_MD"; then
-    awk 'BEGIN{s=0} /^<!-- prd-pipeline:start/{s=1} s==0{print} /^<!-- prd-pipeline:end -->/{s=0}' "$CLAUDE_MD" > "$CLAUDE_MD.tmp"
+    awk 'BEGIN{s=0} /^<!-- prd-pipeline:start/{s=1} s==0{print} /^<!-- prd-pipeline:end -->/{s=0}' "$CLAUDE_MD" \
+      | awk 'NF{last=NR} {a[NR]=$0} END{for(i=1;i<=last;i++) print a[i]}' > "$CLAUDE_MD.tmp"
     printf '\n' >> "$CLAUDE_MD.tmp"; block_text >> "$CLAUDE_MD.tmp"
     mv "$CLAUDE_MD.tmp" "$CLAUDE_MD"; dim "  refreshed prd-pipeline block in CLAUDE.md"
   elif grep -qF "prd-pipeline:start" "$CLAUDE_MD"; then

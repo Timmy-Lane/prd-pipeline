@@ -10,14 +10,12 @@
 # Portability: macOS (BSD awk/sed/ln/mktemp) + Linux (GNU). No GNU-only flags.
 # No readlink -f, no stat -f/-c, no sed -i without extension, no sha256sum.
 #
-# NOTE — known blank-line drift in bin/prd's wire_claude_md refresh path:
-#   Each `prd install` on an already-wired CLAUDE.md prepends one extra blank
-#   line before the managed block (awk strips the block, then printf '\n' >>
-#   re-appends it unconditionally). This means whole-file diff across refreshes
-#   diverges by one blank line per install. The idempotency invariant is therefore
-#   scoped to: exactly ONE marker pair (no duplication), sentinel content intact,
-#   and block body byte-identical — NOT whole-file identity. This is a known
-#   limitation of the current implementation; fixing it is out of scope here.
+# Idempotency: bin/prd's wire_claude_md refresh path strips the old block, then
+#   strips trailing blank lines, then appends exactly one separator + the block.
+#   This makes refresh reach a stable steady state — repeated `prd install` on an
+#   already-wired CLAUDE.md is byte-identical (no blank-line growth). Case 2 asserts
+#   whole-file identity across runs #2 and #3, plus exactly one marker pair, an
+#   intact sentinel line, and a byte-identical block body.
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -145,13 +143,20 @@ prd install >/dev/null 2>&1
 assert_count "C2: one start marker after install#2" 1 "prd-pipeline:start" "$CLAUDE_HOME/CLAUDE.md"
 assert_count "C2: one end marker after install#2"   1 "prd-pipeline:end"   "$CLAUDE_HOME/CLAUDE.md"
 assert_contains "C2: sentinel intact after install#2" "$SENTINEL" "$CLAUDE_HOME/CLAUDE.md"
+cp "$CLAUDE_HOME/CLAUDE.md" "$TMPROOT/c2_run2.md"
 
 BLOCK_BODY_2="$(awk '/<!-- prd-pipeline:start/{f=1; next} /<!-- prd-pipeline:end -->/{f=0} f{print}' "$CLAUDE_HOME/CLAUDE.md")"
 assert_eq "C2: block body byte-identical after refresh" "$BLOCK_BODY_1" "$BLOCK_BODY_2"
 
-# NOTE: whole-file diff diverges by one blank line per install (known drift —
-# see header comment). We assert block body + sentinel only.
-pass "C2: idempotency — block body stable, no duplication, sentinel intact"
+# Install #3: refresh path now strips trailing blanks before re-appending, so the
+# whole file reaches a stable steady state — run #2 and run #3 must be byte-identical.
+prd install >/dev/null 2>&1
+assert_count "C2: one start marker after install#3" 1 "prd-pipeline:start" "$CLAUDE_HOME/CLAUDE.md"
+assert_count "C2: one end marker after install#3"   1 "prd-pipeline:end"   "$CLAUDE_HOME/CLAUDE.md"
+assert_contains "C2: sentinel intact after install#3" "$SENTINEL" "$CLAUDE_HOME/CLAUDE.md"
+cp "$CLAUDE_HOME/CLAUDE.md" "$TMPROOT/c2_run3.md"
+assert_files_identical "C2: whole-file steady state (run#2 == run#3, no blank-line growth)" \
+  "$TMPROOT/c2_run2.md" "$TMPROOT/c2_run3.md"
 
 # Remove: uninstall strips the markers
 prd uninstall >/dev/null 2>&1
