@@ -16,10 +16,11 @@ overrides this where they conflict** (spec dir, template, triggers, invariants, 
 ## Plan-confirmation gate
 Emit the plan (sub-tasks + per-task file scope + risks; **no time estimates**), then **pause for approve/edit/proceed.** Gate HARD on one-way-door / schema / public-API / outcome-moving changes; let reversible single-file changes flow with a one-line heads-up. Once confirmed: **disagree-and-commit** — stop re-arguing scope. Specs are append-only (`draft → accepted → implemented`; never delete; `superseded`/`abandoned` link forward).
 
-## Parallel agents + git worktrees (mandatory for speed; you stay on your branch)
-- **≥2 independent tasks ⇒ parallelize.** One agent per task, each `isolation: "worktree"` (Claude Code gives it its own worktree + branch under `.claude/worktrees/`; its plan/memory/hooks/transcript attach to the worktree, not your repo; auto-cleans if unchanged). Independent agents launch concurrently (multiple `Agent` calls in ONE message).
-- **You NEVER switch branches.** Your working tree stays put on its current branch. The orchestrator `git merge`s each agent's branch back — never `git checkout` the user's tree.
-- **Disjoint-file partition makes merges conflict-free.** Two agents must never edit the same file; cross-cutting edits (shared types, config, schema, build files, docs) serialize AFTER the parallel block, on your branch.
+## Parallel agents + git worktrees (mandatory; you stay on `main`, work auto-branches)
+- **Always start from `main`.** For a T1/T2 feature, the pipeline AUTO-CREATES an independent feature branch in its own git worktree and works there — `main` stays clean and usable the whole time. You never `git checkout`, never manually branch, never get pulled off `main`.
+- **≥2 independent sub-tasks ⇒ parallelize.** One `Agent(isolation:"worktree")` per task — its own nested worktree+branch off the feature branch; plan/memory/hooks attach to the worktree, not your repo; auto-cleans if unchanged. Launch independent agents concurrently (multiple `Agent` calls in ONE message).
+- **Merge inward; touch `main` only at ship.** Sub-task branches `git merge` into the feature branch as they finish; the feature branch lands on `main` ONLY at the deliberate ship step (merge or PR) — never continuously, so `main` is never half-built. The orchestrator never `git checkout`s your tree.
+- **Disjoint-file partition makes the inward merges conflict-free.** Two agents must never edit the same file; cross-cutting edits (shared types, config, schema, build files, docs) serialize AFTER the parallel block, on the feature branch.
 - **Cleanup is part of the task:** after merging a worktree branch, `git worktree remove` it and delete the merged branch — leftover locked worktrees pile up otherwise.
 - **Ceiling 4–8 concurrent worktrees** — above that you're bottlenecked on review, not on Claude.
 - Every spawned agent gets the 7-field contract: objective · inputs (incl. exact file scope) · output_shape · tools_allowed · stop_conditions · context · verification.

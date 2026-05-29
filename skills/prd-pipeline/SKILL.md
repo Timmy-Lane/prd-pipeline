@@ -138,9 +138,13 @@ approve / edit / proceed.** No code touches disk before approval.
 
 ## Step 5 — Implement (parallel, worktree-isolated)
 
-**The mandate: parallel agents in isolated git worktrees; you (and the user) NEVER switch
-branches.** Git worktrees solve the file-conflict problem completely — they are the enabling
-technique for parallel AI development.
+**The mandate: you stay on `main`; the work auto-branches into isolated git worktrees; you
+(and the user) NEVER switch branches and `main` is never left half-built.** Git worktrees solve
+the file-conflict problem completely — they are the enabling technique for parallel AI development.
+
+**Always start from `main`.** For a T1/T2 feature, FIRST auto-create an independent feature
+branch in its own worktree and do all the work there — `main` stays clean and usable the whole
+time. The user never `git checkout`s, never manually branches, never gets pulled off `main`.
 
 - **≥2 disjoint-file tasks ⇒ parallelize.** Spawn one `Agent` per task **with
   `isolation: "worktree"`** (Claude Code spins a fresh worktree + dedicated branch under
@@ -148,9 +152,10 @@ technique for parallel AI development.
   not the user's repo — and auto-cleans if unchanged). Run independent agents concurrently
   (multiple `Agent` calls in ONE message); or use `Skill(superpowers:dispatching-parallel-agents)`
   + `Skill(superpowers:subagent-driven-development)`.
-- **The user's tree never moves.** You stay on the current branch and **`git merge` each
-  agent's branch back** — never `git checkout` the user's working tree. Disjoint-file
-  partitioning (Step 4) is what makes these merges conflict-free.
+- **Merge inward; touch `main` only at ship.** Sub-task branches `git merge` into the **feature
+  branch** as they finish (disjoint-file partition from Step 4 makes this conflict-free). The
+  feature branch lands on `main` ONLY at the deliberate ship step (Step 6) — never continuously,
+  so `main` is never half-built. The orchestrator never `git checkout`s the user's tree.
 - **Each task does TDD** (`Skill(superpowers:test-driven-development)`): test first (RED) →
   minimal impl (GREEN) → refactor.
 - **Cleanup is part of the task.** After merging a worktree branch, `git worktree remove` it
@@ -165,8 +170,8 @@ branch) · `output_shape` (what to return) · `tools_allowed` · `stop_condition
 the agent must **commit its work on its worktree branch before returning**, else there is nothing
 to merge back).
 
-T0: implement directly on the user's branch (TDD + review); no worktree fan-out needed for a
-single small change.
+T0: a single trivial change can go directly on `main` (TDD + review), no worktree fan-out — or
+its own throwaway branch if you want PR hygiene. Anything bigger gets the feature-branch worktree above.
 
 ---
 
@@ -179,8 +184,9 @@ single small change.
    `security-reviewer` (auth/keys/payments/external input) · `database-reviewer` (schema/SQL).
 3. **Re-anchor to the spec** — does what shipped match the confirmed plan? Flag any drift.
 4. **Mark `status: implemented`** in the spec; it stays as the record of what was decided and why.
-5. **Ship** — `Skill(superpowers:finishing-a-development-branch)` → commit/push/merge per the
-   project's git convention (PRs only when asked).
+5. **Ship** — `Skill(superpowers:finishing-a-development-branch)` → integrate the feature branch
+   into `main` (merge or PR) per the project's git convention (PRs only when asked), then prune
+   its worktree. This is the ONLY moment `main` changes.
 
 ---
 
