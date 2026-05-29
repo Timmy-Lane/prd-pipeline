@@ -86,6 +86,25 @@ For T1 the spec is a one-pager (Problem · Goals/Non-Goals · Wedge · Success c
 
 ---
 
+## Step 2.5 — Cross-artifact consistency gate (T2; optional for T1)
+
+Before the grill, run a mechanical consistency check so critics spend their cycles on novel
+problems — not ones a deterministic pass would catch in seconds. Spawn ONE read-only agent
+(tools `[Read, Write]` — Write only for its report) over the spec + `docs/adr/*` + the project's
+CLAUDE.md invariants. Six passes:
+1. **Ambiguity** — vague terms ("fast", "scalable") with no measurable criterion; unresolved `[NEEDS CLARIFICATION]` markers.
+2. **Underspecification** — requirements with no success criterion; references to undefined components.
+3. **Constitution alignment** — conflicts with project invariants (display conventions, config-vs-env, read-only DBs, etc.).
+4. **Coverage gaps** — spec requirements with no corresponding plan task (defer this pass until after Step 4 if the plan doesn't exist yet).
+5. **Inconsistency** — terminology drift vs ADRs; approaches conflicting with shipped specs.
+6. **Duplication** — near-duplicate requirements.
+
+Output: `<spec-dir>/<spec>-analysis.md` — a findings table (severity · location · summary · fix).
+**CRITICAL findings block Step 3** (fix the spec inline first); HIGH/MED findings are passed as
+`context` into the Step 3 critics so they amplify rather than re-discover. (Pattern: spec-kit `/analyze`.)
+
+---
+
 ## Step 3 — Grill (adversarial review of the spec)
 
 Find problems; do NOT propose fixes (that's Step 4). Use the project grill skill if present
@@ -127,6 +146,15 @@ The plan MUST have: disjoint-file task partition · ordered phases with named de
 test plan (the commands the reviewer runs) · rollback/reversibility · risks + blast radius.
 Right-size the diff — smallest change that cleanly expresses the intent, but don't compress a
 necessary rewrite into a patch.
+
+### Plan grader loop (Step 4.5 — T2)
+Before the human sees the plan, converge its quality. Spawn a grader agent **tool-locked to
+`[Read, Edit]`** over the plan file. Score each criterion 1–5: (1) disjoint-file coverage,
+(2) measurable invalidators + rollback per task, (3) test plan present, (4) complexity fit for
+the tier. For any criterion < 4, apply **surgical Edit hunks** to that section — **PATCH, NEVER
+REGENERATE** the plan. Re-score; loop ≤3 rounds or until all ≥ 4. Append a short `## Grader notes`
+(final scores + any criterion still < 4) so the gate sees it. (Pattern: bad-research grader.) T1
+skips this — a one-pager doesn't need it.
 
 ### The plan-gate (the one human gate that matters) — MANDATORY for T2, recommended for T1
 **Emit the plan** (sub-tasks + per-task file scope + risks; **no time estimates**) and **PAUSE for
@@ -184,6 +212,12 @@ its own throwaway branch if you want PR hygiene. Anything bigger gets the featur
    agent / behavior changes, run the project's real-run check (the project CLAUDE.md names it).
 2. **Auto code review** — `code-reviewer` (every diff) · `typescript-reviewer` (TS) ·
    `security-reviewer` (auth/keys/payments/external input) · `database-reviewer` (schema/SQL).
+2b. **Backward traceability gate (T2)** — before marking `implemented`, spawn a read-only agent
+   (`[Read]`) over the confirmed plan + spec + `git diff <feature-branch>..main`. Check: every plan
+   task has a diff change OR an explicit "skipped" note; every spec requirement maps to ≥1 task;
+   no orphan files in the diff with no covering task. CRITICAL gaps (orphan files = scope creep;
+   uncovered requirements = silent omission) block step 4 until resolved. Append the pass/fail
+   summary to the spec. (Pattern: bad-research citation-verifier — bind every change to the plan.)
 3. **Re-anchor to the spec** — does what shipped match the confirmed plan? Flag any drift.
 4. **Mark `status: implemented`** in the spec; it stays as the record of what was decided and why.
 5. **Ship** — `Skill(superpowers:finishing-a-development-branch)` → integrate the feature branch
@@ -223,11 +257,14 @@ its own throwaway branch if you want PR hygiene. Anything bigger gets the featur
 |---|---|
 | Spec intent | `superpowers:brainstorming` |
 | Deep research | `deep-research` skill / `deep-researcher` agent (project may pin another) |
+| Consistency gate (2.5) | read-only `Agent` — 6-pass spec × ADR × CLAUDE.md check (spec-kit `/analyze`) |
 | Grill | project grill skill (e.g. `grill-prd`) ‖ built-in parallel `deep-researcher` critics |
 | Architecture | project eng-review skill ‖ `Agent(subagent_type: Plan)` |
+| Plan grader (4.5) | grader `Agent` `[Read, Edit]` — judge→patch→re-judge ≤3, patch-never-regenerate (bad-research grader) |
 | Plan persistence | `superpowers:writing-plans` |
 | Parallel build | `superpowers:dispatching-parallel-agents` + `subagent-driven-development` + `Agent(isolation:"worktree")` |
 | Per-task TDD | `superpowers:test-driven-development` |
 | Verify | `superpowers:verification-before-completion` |
+| Traceability gate (6.2b) | read-only `Agent` — plan ↔ diff ↔ spec, blocks `implemented` on drift (bad-research citation-verifier) |
 | Review | `code-reviewer` · `typescript-reviewer` · `security-reviewer` · `database-reviewer` |
 | Ship | `superpowers:finishing-a-development-branch` |
