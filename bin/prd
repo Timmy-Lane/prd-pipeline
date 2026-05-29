@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# prd — installer for the prd-pipeline Claude Code skill + rule.
+# Pure bash, no dependencies. Deploys this repo's skill/rule into ~/.claude/.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+SKILLS_DST="$CLAUDE_HOME/skills"
+RULES_DST="$CLAUDE_HOME/rules/common"
+
+c_green() { printf '\033[32m%s\033[0m\n' "$1"; }
+c_dim()   { printf '\033[2m%s\033[0m\n' "$1"; }
+
+cmd_install() {
+  mkdir -p "$SKILLS_DST" "$RULES_DST"
+  cp -R "$REPO_ROOT/skills/prd-pipeline" "$SKILLS_DST/"
+  cp "$REPO_ROOT/rules/feature-workflow.md" "$RULES_DST/feature-workflow.md"
+  c_green "installed:"
+  echo "  skill → $SKILLS_DST/prd-pipeline/  (invoke with /prd-pipeline)"
+  echo "  rule  → $RULES_DST/feature-workflow.md  (auto-loads every session)"
+  echo
+  c_dim "Add this row to your global ~/.claude/CLAUDE.md tool-routing table for discoverability:"
+  echo '  | Build/add/implement feature | `/prd-pipeline` — tier-routed: spec → grill → confirmed plan → parallel worktree build → verify → ship |'
+}
+
+cmd_update() {
+  if [ -d "$REPO_ROOT/.git" ]; then
+    git -C "$REPO_ROOT" pull --ff-only || c_dim "git pull skipped (no upstream / not ff)"
+  fi
+  cmd_install
+  c_green "updated."
+}
+
+cmd_uninstall() {
+  rm -rf "$SKILLS_DST/prd-pipeline"
+  rm -f "$RULES_DST/feature-workflow.md"
+  c_green "uninstalled skill + rule from $CLAUDE_HOME (your CLAUDE.md edits are left intact — remove the routing row by hand)."
+}
+
+cmd_doctor() {
+  echo "prd-pipeline doctor"
+  echo "  repo:         $REPO_ROOT"
+  echo "  claude home:  $CLAUDE_HOME"
+  [ -f "$SKILLS_DST/prd-pipeline/SKILL.md" ] && c_green "  skill:        installed" || echo "  skill:        NOT installed (run: prd install)"
+  [ -f "$RULES_DST/feature-workflow.md" ]    && c_green "  rule:         installed" || echo "  rule:         NOT installed (run: prd install)"
+  command -v git >/dev/null 2>&1 && c_green "  git:          found" || echo "  git:          MISSING (worktree mandate needs git)"
+}
+
+case "${1:-}" in
+  install)   cmd_install ;;
+  update)    cmd_update ;;
+  uninstall) cmd_uninstall ;;
+  doctor)    cmd_doctor ;;
+  *) echo "usage: prd {install|update|uninstall|doctor}"; exit 1 ;;
+esac
