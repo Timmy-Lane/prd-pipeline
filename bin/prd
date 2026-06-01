@@ -247,6 +247,29 @@ cmd_notify() {
   esac
 }
 
+spec_template() {
+  if [ -f "$REPO_ROOT/skills/prd-pipeline/references/spec-template.md" ]; then
+    echo "$REPO_ROOT/skills/prd-pipeline/references/spec-template.md"
+  else
+    echo "$SKILLS_DST/prd-pipeline/references/spec-template.md"
+  fi
+}
+
+cmd_new() {
+  local topic="${1:-}"
+  [ -n "$topic" ] || { err "usage: prd new <topic-kebab-case>"; exit 1; }
+  local dir="docs/specs"; mkdir -p "$dir"
+  local last n
+  last="$(ls "$dir" 2>/dev/null | sed -n 's/^\([0-9]\{4\}\)-.*/\1/p' | sort -n | tail -1)"
+  n="$(printf '%04d' "$(( 10#${last:-0} + 1 ))")"
+  local tmpl out today; tmpl="$(spec_template)"; out="$dir/$n-$topic.md"; today="$(date +%Y-%m-%d)"
+  [ -f "$tmpl" ] || { err "spec template not found ($tmpl)"; exit 1; }
+  sed -e "s/^id: NNNN/id: $n/" \
+      -e "s/^title: <kebab-case-title>/title: $topic/" \
+      -e "s/^created: <YYYY-MM-DD>/created: $today/" "$tmpl" > "$out"
+  green "created $out"
+}
+
 prd_version() { tr -d '[:space:]' < "$REPO_ROOT/VERSION" 2>/dev/null; }
 cmd_version() { local v; v="$(prd_version)"; echo "${v:-unknown}"; }
 
@@ -279,10 +302,11 @@ main(){
     uninstall) cmd_uninstall ;;
     doctor)    cmd_doctor ;;
     notify)    cmd_notify "$@" ;;
+    new)       cmd_new "$@" ;;
     version|--version|-v) cmd_version ;;
     ""|-h|--help|help)
-      echo "usage: prd {install [--project DIR] | update | uninstall | doctor | version}" ;;
-    *) err "unknown command: $sub"; echo "usage: prd {install [--project DIR] | update | uninstall | doctor | version}"; exit 1 ;;
+      echo "usage: prd {install [--project DIR] | update | uninstall | doctor | new <topic> | version}" ;;
+    *) err "unknown command: $sub"; echo "usage: prd {install [--project DIR] | update | uninstall | doctor | new <topic> | version}"; exit 1 ;;
   esac
 }
 main "$@"

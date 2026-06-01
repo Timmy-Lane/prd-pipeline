@@ -440,6 +440,23 @@ PRD_LSREMOTE_TAGS_FILE="$FAKE2" prd notify --hook >/dev/null 2>&1
 assert_eq "C13: hook always exits 0" "0" "$?"
 
 # ============================================================
+# CASE 14: prd new <topic> scaffolds docs/specs/NNNN-<topic>.md
+# ============================================================
+printf '\n\033[1m[14] prd new\033[0m\n'
+
+C14="$TMPROOT/c14-repo"; mkdir -p "$C14/docs/specs"
+( cd "$C14" && bash "$REPO/bin/prd" new auth-rate-limit >/dev/null 2>&1 )
+NEWSPEC="$C14/docs/specs/0001-auth-rate-limit.md"
+assert_file_exists  "C14: spec file created"          "$NEWSPEC"
+assert_contains     "C14: id filled"     "id: 0001"               "$NEWSPEC"
+assert_contains     "C14: title filled"  "title: auth-rate-limit" "$NEWSPEC"
+assert_not_contains "C14: no NNNN placeholder left" "id: NNNN"    "$NEWSPEC"
+
+# Next number increments past existing specs
+( cd "$C14" && bash "$REPO/bin/prd" new second-thing >/dev/null 2>&1 )
+assert_file_exists "C14: second spec is 0002" "$C14/docs/specs/0002-second-thing.md"
+
+# ============================================================
 # Belt-and-suspenders: real CLAUDE.md must be untouched
 # ============================================================
 if [ -f "$REAL_CLAUDE_MD" ] && [ -f "$REAL_CLAUDE_SNAP" ]; then
