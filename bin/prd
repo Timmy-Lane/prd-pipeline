@@ -99,6 +99,39 @@ cmd_install_project(){
   dim "  the feature-workflow rule stays global; project skills override global on conflict."
 }
 
+# ver_gt A B → exit 0 if A > B (numeric per-component; handles 0.10.0 > 0.9.0)
+ver_gt() {
+  local a="${1#v}" b="${2#v}"; [ "$a" = "$b" ] && return 1
+  local IFS=. ; set -- $a; local a1=${1:-0} a2=${2:-0} a3=${3:-0}
+  set -- $b; local b1=${1:-0} b2=${2:-0} b3=${3:-0}
+  [ "$a1" -ne "$b1" ] 2>/dev/null && { [ "$a1" -gt "$b1" ]; return; }
+  [ "$a2" -ne "$b2" ] 2>/dev/null && { [ "$a2" -gt "$b2" ]; return; }
+  [ "$a3" -gt "$b3" ] 2>/dev/null
+}
+
+# Highest vX.Y.Z release tag from the remote (test seam: PRD_LSREMOTE_TAGS_FILE)
+latest_remote_tag() {
+  local raw
+  if [ -n "${PRD_LSREMOTE_TAGS_FILE:-}" ]; then
+    raw="$(cat "$PRD_LSREMOTE_TAGS_FILE" 2>/dev/null)"
+  else
+    raw="$(git ls-remote --tags "$REPO_URL" 2>/dev/null)"
+  fi
+  printf '%s\n' "$raw" \
+    | sed -n 's#.*\(v\{0,1\}[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$#\1#p' \
+    | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1
+}
+
+cmd_update_check() {
+  local cur latest; cur="$(prd_version)"; latest="$(latest_remote_tag)"
+  if [ -z "$latest" ]; then dim "  could not check for updates (offline?)"; return 0; fi
+  if ver_gt "$latest" "$cur"; then
+    green "  update available: v$cur → v$latest (run: prd update)"
+  else
+    green "  up to date (v$cur)"
+  fi
+}
+
 cmd_update(){
   [ -d "$REPO_ROOT/.git" ] && { git -C "$REPO_ROOT" pull --ff-only || dim "  git pull skipped (no fast-forward / no upstream)"; }
   cmd_install_global
@@ -162,7 +195,7 @@ main(){
   case "$sub" in
     install)
       if [ "${1:-}" = "--project" ]; then cmd_install_project "${2:-}"; else cmd_install_global; fi ;;
-    update)    cmd_update ;;
+    update)    if [ "${1:-}" = "--check" ]; then cmd_update_check; else cmd_update; fi ;;
     uninstall) cmd_uninstall ;;
     doctor)    cmd_doctor ;;
     version|--version|-v) cmd_version ;;

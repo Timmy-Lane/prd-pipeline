@@ -346,6 +346,28 @@ case "$DOC2" in *drift*) pass "C10: doctor warns on drift" ;; *) fail "C10: no d
 prd uninstall >/dev/null 2>&1
 
 # ============================================================
+# CASE 11: prd update --check (mocked remote tags)
+# ============================================================
+printf '\n\033[1m[11] prd update --check\033[0m\n'
+
+CLONE_VER="$(tr -d '[:space:]' < "$REPO/VERSION")"   # e.g. 0.2.0
+
+# Newer tag available → "update available"
+FAKE="$TMPROOT/tags-newer"; printf 'v0.2.0\nv0.10.0\nv0.9.0\n' > "$FAKE"
+OUT="$(PRD_LSREMOTE_TAGS_FILE="$FAKE" prd update --check 2>&1)"
+case "$OUT" in *"update available"*"0.10.0"*) pass "C11: detects newer release" ;; *) fail "C11: did not detect newer release ($OUT)" ;; esac
+
+# Only equal/older tags → "up to date"
+FAKE2="$TMPROOT/tags-same"; printf 'v0.0.9\nv%s\n' "$CLONE_VER" > "$FAKE2"
+OUT2="$(PRD_LSREMOTE_TAGS_FILE="$FAKE2" prd update --check 2>&1)"
+case "$OUT2" in *"up to date"*) pass "C11: up to date when no newer tag" ;; *) fail "C11: expected up to date ($OUT2)" ;; esac
+
+# No tags reachable → graceful, non-fatal
+FAKE3="$TMPROOT/tags-empty"; : > "$FAKE3"
+PRD_LSREMOTE_TAGS_FILE="$FAKE3" prd update --check >/dev/null 2>&1
+assert_eq "C11: empty tag list is non-fatal (exit 0)" "0" "$?"
+
+# ============================================================
 # Belt-and-suspenders: real CLAUDE.md must be untouched
 # ============================================================
 if [ -f "$REAL_CLAUDE_MD" ] && [ -f "$REAL_CLAUDE_SNAP" ]; then
