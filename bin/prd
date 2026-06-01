@@ -321,8 +321,19 @@ main(){
     list)      cmd_list ;;
     version|--version|-v) cmd_version ;;
     ""|-h|--help|help)
-      echo "usage: prd {install [--project DIR] | update | uninstall | doctor | new <topic> | list | version}" ;;
-    *) err "unknown command: $sub"; echo "usage: prd {install [--project DIR] | update | uninstall | doctor | new <topic> | list | version}"; exit 1 ;;
+      cat <<'USAGE'
+usage: prd <command>
+  install [--project DIR]   install globally (or just the skill into DIR)
+  update [--check]          git pull + reinstall  (update --check: report newer release, no pull)
+  uninstall                 remove skill, rule, CLAUDE.md block, symlink
+  doctor                    show install status + versions (clone vs installed)
+  version                   print the prd-pipeline version
+  notify {on|off|status}    opt-in SessionStart update nudge (<=1 network check/day)
+  new <topic>               scaffold docs/specs/NNNN-<topic>.md from the template
+  list                      list specs (id, title, status)
+USAGE
+      ;;
+    *) err "unknown command: $sub"; err "run: prd --help"; exit 1 ;;
   esac
 }
 main "$@"

@@ -469,6 +469,15 @@ case "$LIST" in *0001*alpha*draft*) pass "C15: lists draft spec" ;; *) fail "C15
 case "$LIST" in *0002*beta*implemented*) pass "C15: lists implemented spec" ;; *) fail "C15: missing beta/implemented ($LIST)" ;; esac
 
 # ============================================================
+# CASE 16: help lists the new verbs
+# ============================================================
+printf '\n\033[1m[16] help text\033[0m\n'
+HELP="$(bash "$REPO/bin/prd" --help 2>&1)"
+for v in version "update --check" notify new list; do
+  case "$HELP" in *"$v"*) pass "C16: help mentions $v" ;; *) fail "C16: help missing $v" ;; esac
+done
+
+# ============================================================
 # Belt-and-suspenders: real CLAUDE.md must be untouched
 # ============================================================
 if [ -f "$REAL_CLAUDE_MD" ] && [ -f "$REAL_CLAUDE_SNAP" ]; then
