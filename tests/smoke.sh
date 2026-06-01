@@ -457,6 +457,18 @@ assert_not_contains "C14: no NNNN placeholder left" "id: NNNN"    "$NEWSPEC"
 assert_file_exists "C14: second spec is 0002" "$C14/docs/specs/0002-second-thing.md"
 
 # ============================================================
+# CASE 15: prd list shows id · title · status from frontmatter
+# ============================================================
+printf '\n\033[1m[15] prd list\033[0m\n'
+
+C15="$TMPROOT/c15-repo"; mkdir -p "$C15/docs/specs"
+printf 'id: 0001\ntitle: alpha\nstatus: draft\n'       > "$C15/docs/specs/0001-alpha.md"
+printf 'id: 0002\ntitle: beta\nstatus: implemented\n'  > "$C15/docs/specs/0002-beta.md"
+LIST="$( cd "$C15" && bash "$REPO/bin/prd" list 2>&1 )"
+case "$LIST" in *0001*alpha*draft*) pass "C15: lists draft spec" ;; *) fail "C15: missing alpha/draft ($LIST)" ;; esac
+case "$LIST" in *0002*beta*implemented*) pass "C15: lists implemented spec" ;; *) fail "C15: missing beta/implemented ($LIST)" ;; esac
+
+# ============================================================
 # Belt-and-suspenders: real CLAUDE.md must be untouched
 # ============================================================
 if [ -f "$REAL_CLAUDE_MD" ] && [ -f "$REAL_CLAUDE_SNAP" ]; then

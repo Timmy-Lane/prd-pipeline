@@ -270,6 +270,21 @@ cmd_new() {
   green "created $out"
 }
 
+cmd_list() {
+  local dir="docs/specs"
+  [ -d "$dir" ] || { dim "  no $dir/ in $(pwd)"; return 0; }
+  local f id title status found=0
+  for f in "$dir"/*.md; do
+    [ -f "$f" ] || continue
+    found=1
+    id="$(sed -n 's/^id: *//p' "$f" | head -1)"
+    title="$(sed -n 's/^title: *//p' "$f" | head -1)"
+    status="$(sed -n 's/^status: *//p' "$f" | head -1 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')"
+    printf '  %-6s %-28s %s\n' "${id:-?}" "${title:-?}" "${status:-?}"
+  done
+  [ "$found" = 1 ] || dim "  no specs in $dir/"
+}
+
 prd_version() { tr -d '[:space:]' < "$REPO_ROOT/VERSION" 2>/dev/null; }
 cmd_version() { local v; v="$(prd_version)"; echo "${v:-unknown}"; }
 
@@ -303,10 +318,11 @@ main(){
     doctor)    cmd_doctor ;;
     notify)    cmd_notify "$@" ;;
     new)       cmd_new "$@" ;;
+    list)      cmd_list ;;
     version|--version|-v) cmd_version ;;
     ""|-h|--help|help)
-      echo "usage: prd {install [--project DIR] | update | uninstall | doctor | new <topic> | version}" ;;
-    *) err "unknown command: $sub"; echo "usage: prd {install [--project DIR] | update | uninstall | doctor | new <topic> | version}"; exit 1 ;;
+      echo "usage: prd {install [--project DIR] | update | uninstall | doctor | new <topic> | list | version}" ;;
+    *) err "unknown command: $sub"; echo "usage: prd {install [--project DIR] | update | uninstall | doctor | new <topic> | list | version}"; exit 1 ;;
   esac
 }
 main "$@"
