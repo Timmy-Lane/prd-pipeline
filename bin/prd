@@ -9,7 +9,22 @@
 #   prd doctor                  show install status
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+green(){ printf '\033[32m%s\033[0m\n' "$1"; }
+dim(){ printf '\033[2m%s\033[0m\n' "$1"; }
+err(){ printf '\033[31m%s\033[0m\n' "$1" >&2; }
+
+# Resolve this script's real directory even when invoked through a symlink
+# (portable: no GNU readlink -f). $0/BASH_SOURCE may be a symlink on PATH.
+_resolve_dir() {
+  local src="${BASH_SOURCE[0]}" dir
+  while [ -h "$src" ]; do
+    dir="$(cd -P "$(dirname "$src")" && pwd)"
+    src="$(readlink "$src")"
+    case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+  done
+  cd -P "$(dirname "$src")" && pwd
+}
+REPO_ROOT="$(cd "$(_resolve_dir)/.." && pwd)"
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 SKILLS_DST="$CLAUDE_HOME/skills"
 RULES_DST="$CLAUDE_HOME/rules/common"
@@ -17,10 +32,8 @@ CLAUDE_MD="$CLAUDE_HOME/CLAUDE.md"
 BIN_DST="${PRD_BIN_DIR:-$HOME/.local/bin}"
 MARK_START="<!-- prd-pipeline:start (managed by \`prd install\` — do not edit inside) -->"
 MARK_END="<!-- prd-pipeline:end -->"
-
-green(){ printf '\033[32m%s\033[0m\n' "$1"; }
-dim(){ printf '\033[2m%s\033[0m\n' "$1"; }
-err(){ printf '\033[31m%s\033[0m\n' "$1" >&2; }
+REPO_URL="${PRD_REPO_URL:-https://github.com/Timmy-Lane/prd-pipeline.git}"
+case "$REPO_URL" in https://*) : ;; *) err "PRD_REPO_URL must be https:// (got: $REPO_URL)"; exit 1 ;; esac
 
 block_text(){
   cat <<EOF
@@ -120,6 +133,9 @@ check_deps(){
   fi
 }
 
+prd_version() { tr -d '[:space:]' < "$REPO_ROOT/VERSION" 2>/dev/null; }
+cmd_version() { local v; v="$(prd_version)"; echo "${v:-unknown}"; }
+
 cmd_doctor(){
   echo "prd-pipeline doctor"
   echo "  repo:        $REPO_ROOT"
@@ -139,9 +155,10 @@ main(){
     update)    cmd_update ;;
     uninstall) cmd_uninstall ;;
     doctor)    cmd_doctor ;;
+    version|--version|-v) cmd_version ;;
     ""|-h|--help|help)
-      echo "usage: prd {install [--project DIR] | update | uninstall | doctor}" ;;
-    *) err "unknown command: $sub"; echo "usage: prd {install [--project DIR] | update | uninstall | doctor}"; exit 1 ;;
+      echo "usage: prd {install [--project DIR] | update | uninstall | doctor | version}" ;;
+    *) err "unknown command: $sub"; echo "usage: prd {install [--project DIR] | update | uninstall | doctor | version}"; exit 1 ;;
   esac
 }
 main "$@"

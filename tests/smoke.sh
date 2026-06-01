@@ -302,6 +302,24 @@ assert_symlink     "C8: symlink created via install.sh" "$PRD_BIN_DIR/prd"
 assert_contains    "C8: CLAUDE.md wired via install.sh" "prd-pipeline:start" "$CLAUDE_HOME/CLAUDE.md"
 
 # ============================================================
+# CASE 9: prd version + symlink-safe invocation
+# ============================================================
+printf '\n\033[1m[9] prd version (direct + via symlink)\033[0m\n'
+
+C9="$TMPROOT/c9"
+mkdir -p "$C9/claude" "$C9/bin" "$C9/prd"
+export CLAUDE_HOME="$C9/claude"; export PRD_BIN_DIR="$C9/bin"; export PRD_HOME="$C9/prd"
+
+EXPECT_VER="$(tr -d '[:space:]' < "$REPO/VERSION")"
+assert_eq "C9: prd version (direct)" "$EXPECT_VER" "$(prd version)"
+
+# install, then invoke through the installed symlink — exercises symlink-safe REPO_ROOT
+prd install >/dev/null 2>&1
+assert_symlink "C9: symlink exists" "$PRD_BIN_DIR/prd"
+assert_eq "C9: prd version (via symlink)" "$EXPECT_VER" "$(bash "$PRD_BIN_DIR/prd" version)"
+prd uninstall >/dev/null 2>&1
+
+# ============================================================
 # Belt-and-suspenders: real CLAUDE.md must be untouched
 # ============================================================
 if [ -f "$REAL_CLAUDE_MD" ] && [ -f "$REAL_CLAUDE_SNAP" ]; then
