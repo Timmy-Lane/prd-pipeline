@@ -167,6 +167,73 @@ check_deps(){
   fi
 }
 
+NOTIFY_CMD="$BIN_DST/prd notify --hook"   # absolute; hooks may run with minimal PATH
+NOTIFY_MATCH="notify --hook"              # substring used to find/remove our hook
+
+notify_hook_add() {
+  local set="$CLAUDE_HOME/settings.json" tmp; tmp="$set.tmp.$$"
+  mkdir -p "$CLAUDE_HOME"
+  if python3 - "$set" "$NOTIFY_CMD" "$NOTIFY_MATCH" > "$tmp" <<'PY'
+import json,sys,os
+path,cmd,match=sys.argv[1],sys.argv[2],sys.argv[3]
+data=json.load(open(path)) if (os.path.exists(path) and os.path.getsize(path)>0) else {}
+ss=data.setdefault("hooks",{}).setdefault("SessionStart",[])
+present=any(match in (h.get("command","")) for g in ss for h in g.get("hooks",[]))
+if not present:
+    grp=next((g for g in ss if g.get("matcher")=="startup"), None)
+    if grp is None:
+        grp={"matcher":"startup","hooks":[]}; ss.append(grp)
+    grp.setdefault("hooks",[]).append({"type":"command","command":cmd,"timeout":10})
+json.dump(data,sys.stdout,indent=2); sys.stdout.write("\n")
+PY
+  then mv "$tmp" "$set"
+  else rm -f "$tmp"; err "  could not parse $set as JSON — left unchanged. Fix it, or add the hook by hand."; exit 1
+  fi
+}
+
+notify_hook_remove() {
+  local set="$CLAUDE_HOME/settings.json" tmp; tmp="$set.tmp.$$"
+  [ -f "$set" ] || return 0
+  if python3 - "$set" "$NOTIFY_MATCH" > "$tmp" <<'PY'
+import json,sys,os
+path,match=sys.argv[1],sys.argv[2]
+data=json.load(open(path)) if os.path.getsize(path)>0 else {}
+ss=data.get("hooks",{}).get("SessionStart",[])
+for g in ss: g["hooks"]=[h for h in g.get("hooks",[]) if match not in (h.get("command",""))]
+ss=[g for g in ss if g.get("hooks")]
+if ss: data["hooks"]["SessionStart"]=ss
+else:
+    data.get("hooks",{}).pop("SessionStart",None)
+    if data.get("hooks")=={}: data.pop("hooks",None)
+json.dump(data,sys.stdout,indent=2); sys.stdout.write("\n")
+PY
+  then mv "$tmp" "$set"
+  else rm -f "$tmp"; err "  could not parse $set as JSON — left unchanged."; exit 1
+  fi
+}
+
+cmd_notify_hook() { :; }   # real shim implemented in Task 5; no-op stub for now
+
+cmd_notify() {
+  case "${1:-}" in
+    on)
+      if ! command -v python3 >/dev/null 2>&1; then
+        err "  prd notify needs python3 to edit settings.json safely. Add this SessionStart hook by hand:"
+        dim "    {\"hooks\":{\"SessionStart\":[{\"matcher\":\"startup\",\"hooks\":[{\"type\":\"command\",\"command\":\"$NOTIFY_CMD\",\"timeout\":10}]}]}}"
+        exit 1
+      fi
+      notify_hook_add
+      green "  prd notify enabled (opt-in SessionStart nudge, <=1 network check/day)." ;;
+    off)
+      if ! command -v python3 >/dev/null 2>&1; then err "  prd notify off needs python3"; exit 1; fi
+      notify_hook_remove; green "  prd notify disabled." ;;
+    --hook) cmd_notify_hook ;;
+    ""|status)
+      if grep -qsF "$NOTIFY_MATCH" "$CLAUDE_HOME/settings.json" 2>/dev/null; then echo "  notify: on"; else echo "  notify: off"; fi ;;
+    *) err "usage: prd notify {on|off|status}"; exit 1 ;;
+  esac
+}
+
 prd_version() { tr -d '[:space:]' < "$REPO_ROOT/VERSION" 2>/dev/null; }
 cmd_version() { local v; v="$(prd_version)"; echo "${v:-unknown}"; }
 
@@ -198,6 +265,7 @@ main(){
     update)    if [ "${1:-}" = "--check" ]; then cmd_update_check; else cmd_update; fi ;;
     uninstall) cmd_uninstall ;;
     doctor)    cmd_doctor ;;
+    notify)    cmd_notify "$@" ;;
     version|--version|-v) cmd_version ;;
     ""|-h|--help|help)
       echo "usage: prd {install [--project DIR] | update | uninstall | doctor | version}" ;;

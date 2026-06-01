@@ -368,6 +368,47 @@ PRD_LSREMOTE_TAGS_FILE="$FAKE3" prd update --check >/dev/null 2>&1
 assert_eq "C11: empty tag list is non-fatal (exit 0)" "0" "$?"
 
 # ============================================================
+# CASE 12: prd notify on|off (settings.json safety + idempotency)
+# ============================================================
+printf '\n\033[1m[12] prd notify on/off\033[0m\n'
+
+if command -v python3 >/dev/null 2>&1; then
+  C12="$TMPROOT/c12"; mkdir -p "$C12/claude" "$C12/bin" "$C12/prd"
+  export CLAUDE_HOME="$C12/claude"; export PRD_BIN_DIR="$C12/bin"; export PRD_HOME="$C12/prd"
+  SET="$CLAUDE_HOME/settings.json"
+
+  # Seed a REALISTIC foreign hook (with a matcher) that must survive untouched
+  printf '{\n  "hooks": {\n    "SessionStart": [\n      { "matcher": "startup", "hooks": [ { "type": "command", "command": "echo keep-me" } ] }\n    ]\n  }\n}\n' > "$SET"
+
+  prd notify on >/dev/null 2>&1
+  assert_eq "C12: settings.json valid JSON after on" "0" \
+    "$(python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$SET" 2>/dev/null; echo $?)"
+  assert_contains    "C12: prd hook present after on"  "notify --hook" "$SET"
+  assert_contains    "C12: foreign hook survived on"   "echo keep-me"  "$SET"
+
+  prd notify on >/dev/null 2>&1   # idempotent
+  assert_count       "C12: exactly one prd hook"  1  "notify --hook" "$SET"
+
+  STAT="$(prd notify status 2>&1)"
+  case "$STAT" in *on*) pass "C12: status reports on" ;; *) fail "C12: status not on ($STAT)" ;; esac
+
+  prd notify off >/dev/null 2>&1
+  assert_not_contains "C12: prd hook gone after off"   "notify --hook" "$SET"
+  assert_contains     "C12: foreign hook survived off" "echo keep-me"  "$SET"
+  assert_eq "C12: settings.json valid JSON after off" "0" \
+    "$(python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$SET" 2>/dev/null; echo $?)"
+
+  # parse-or-abort: malformed settings.json must be LEFT UNCHANGED (not clobbered)
+  BAD="$TMPROOT/c12bad"; mkdir -p "$BAD/claude" "$BAD/bin" "$BAD/prd"
+  printf '{ this is not json ' > "$BAD/claude/settings.json"
+  BADCOPY="$(cat "$BAD/claude/settings.json")"
+  CLAUDE_HOME="$BAD/claude" PRD_BIN_DIR="$BAD/bin" PRD_HOME="$BAD/prd" prd notify on >/dev/null 2>&1 || true
+  assert_eq "C12: malformed settings.json left unchanged" "$BADCOPY" "$(cat "$BAD/claude/settings.json")"
+else
+  pass "C12: skipped (no python3 — notify gates itself off with manual instructions)"
+fi
+
+# ============================================================
 # Belt-and-suspenders: real CLAUDE.md must be untouched
 # ============================================================
 if [ -f "$REAL_CLAUDE_MD" ] && [ -f "$REAL_CLAUDE_SNAP" ]; then
