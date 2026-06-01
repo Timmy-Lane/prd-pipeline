@@ -118,8 +118,8 @@ latest_remote_tag() {
     raw="$(git ls-remote --tags "$REPO_URL" 2>/dev/null)"
   fi
   printf '%s\n' "$raw" \
-    | sed -n 's#.*\(v\{0,1\}[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$#\1#p' \
-    | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1
+    | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+$' \
+    | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1 || true
 }
 
 cmd_update_check() {
@@ -212,7 +212,20 @@ PY
   fi
 }
 
-cmd_notify_hook() { :; }   # real shim implemented in Task 5; no-op stub for now
+cmd_notify_hook() {
+  local cache="$CLAUDE_HOME/.prd-update-cache" now last="" latest="" age=86400
+  now="$(date +%s 2>/dev/null)" || exit 0
+  if [ -f "$cache" ]; then IFS=$'\t' read -r last latest < "$cache" 2>/dev/null; fi
+  if [ -z "${last:-}" ] || [ $((now - last)) -ge $age ] 2>/dev/null; then
+    latest="$(latest_remote_tag)"
+    [ -n "$latest" ] && printf '%s\t%s\n' "$now" "$latest" > "$cache" 2>/dev/null
+  fi
+  local cur; cur="$(prd_version)"
+  if [ -n "${latest:-}" ] && ver_gt "$latest" "$cur"; then
+    echo "prd-pipeline: update available v$cur → v$latest (run: prd update)"
+  fi
+  exit 0
+}
 
 cmd_notify() {
   case "${1:-}" in

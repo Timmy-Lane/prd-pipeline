@@ -409,6 +409,37 @@ else
 fi
 
 # ============================================================
+# CASE 13: prd notify --hook (cache + nudge, no network when fresh)
+# ============================================================
+printf '\n\033[1m[13] prd notify --hook\033[0m\n'
+
+C13="$TMPROOT/c13"; mkdir -p "$C13/claude"
+export CLAUDE_HOME="$C13/claude"; export PRD_BIN_DIR="$C13/bin"; export PRD_HOME="$C13/prd"
+CACHE="$CLAUDE_HOME/.prd-update-cache"
+CLONE_VER="$(tr -d '[:space:]' < "$REPO/VERSION")"
+
+# Stale/empty cache + a newer mocked tag → prints a nudge AND writes the cache
+FAKE="$TMPROOT/c13-tags"; printf 'v99.0.0\n' > "$FAKE"
+OUT="$(PRD_LSREMOTE_TAGS_FILE="$FAKE" prd notify --hook 2>&1)"
+case "$OUT" in *"update available"*"99.0.0"*) pass "C13: hook nudges on newer release" ;; *) fail "C13: no nudge ($OUT)" ;; esac
+assert_file_exists "C13: cache written" "$CACHE"
+
+# Fresh cache (just written) → no network needed; NO seam set, so a network call would find no tag.
+# Reusing the cached tag must still nudge.
+OUT2="$(prd notify --hook 2>&1)"
+case "$OUT2" in *"update available"*"99.0.0"*) pass "C13: fresh cache reused (no network)" ;; *) fail "C13: cache not reused ($OUT2)" ;; esac
+
+# Current version equals latest → no nudge
+FAKE2="$TMPROOT/c13-same"; printf 'v%s\n' "$CLONE_VER" > "$FAKE2"
+rm -f "$CACHE"
+OUT3="$(PRD_LSREMOTE_TAGS_FILE="$FAKE2" prd notify --hook 2>&1)"
+assert_eq "C13: no nudge when up to date" "" "$OUT3"
+
+# Exit code is always 0 (must never break session start)
+PRD_LSREMOTE_TAGS_FILE="$FAKE2" prd notify --hook >/dev/null 2>&1
+assert_eq "C13: hook always exits 0" "0" "$?"
+
+# ============================================================
 # Belt-and-suspenders: real CLAUDE.md must be untouched
 # ============================================================
 if [ -f "$REAL_CLAUDE_MD" ] && [ -f "$REAL_CLAUDE_SNAP" ]; then
