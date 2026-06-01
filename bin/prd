@@ -215,8 +215,10 @@ PY
 cmd_notify_hook() {
   local cache="$CLAUDE_HOME/.prd-update-cache" now last="" latest="" age=86400
   now="$(date +%s 2>/dev/null)" || exit 0
-  if [ -f "$cache" ]; then IFS=$'\t' read -r last latest < "$cache" 2>/dev/null; fi
-  if [ -z "${last:-}" ] || [ $((now - last)) -ge $age ] 2>/dev/null; then
+  last=""; latest=""
+  if [ -f "$cache" ]; then IFS=$'\t' read -r last latest < "$cache" 2>/dev/null || true; fi
+  case "${last:-}" in ''|*[!0-9]*) last=""; latest="" ;; esac   # corrupt/empty cache → treat as stale, refetch
+  if [ -z "$last" ] || [ $((now - last)) -ge "$age" ]; then
     latest="$(latest_remote_tag)"
     [ -n "$latest" ] && printf '%s\t%s\n' "$now" "$latest" > "$cache" 2>/dev/null
   fi
@@ -258,6 +260,9 @@ spec_template() {
 cmd_new() {
   local topic="${1:-}"
   [ -n "$topic" ] || { err "usage: prd new <topic-kebab-case>"; exit 1; }
+  case "$topic" in
+    *[!a-z0-9-]*|-*|*-) err "topic must be lowercase kebab-case [a-z0-9-], not starting/ending with '-'"; exit 1 ;;
+  esac
   local dir="docs/specs"; mkdir -p "$dir"
   local last n
   last="$(ls "$dir" 2>/dev/null | sed -n 's/^\([0-9]\{4\}\)-.*/\1/p' | sort -n | tail -1)"

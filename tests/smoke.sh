@@ -367,6 +367,10 @@ FAKE3="$TMPROOT/tags-empty"; : > "$FAKE3"
 PRD_LSREMOTE_TAGS_FILE="$FAKE3" prd update --check >/dev/null 2>&1
 assert_eq "C11: empty tag list is non-fatal (exit 0)" "0" "$?"
 
+# Missing seam file (genuine non-zero-exit from cat) → still non-fatal
+PRD_LSREMOTE_TAGS_FILE="/no/such/file/prd-test" prd update --check >/dev/null 2>&1
+assert_eq "C11: missing seam file is non-fatal (exit 0)" "0" "$?"
+
 # ============================================================
 # CASE 12: prd notify on|off (settings.json safety + idempotency)
 # ============================================================
@@ -439,6 +443,11 @@ assert_eq "C13: no nudge when up to date" "" "$OUT3"
 PRD_LSREMOTE_TAGS_FILE="$FAKE2" prd notify --hook >/dev/null 2>&1
 assert_eq "C13: hook always exits 0" "0" "$?"
 
+# corrupted cache must not crash the hook (always exit 0)
+printf 'notanumber\tgarbage\n' > "$CACHE"
+PRD_LSREMOTE_TAGS_FILE="$FAKE" prd notify --hook >/dev/null 2>&1
+assert_eq "C13: corrupted cache is non-fatal (exit 0)" "0" "$?"
+
 # ============================================================
 # CASE 14: prd new <topic> scaffolds docs/specs/NNNN-<topic>.md
 # ============================================================
@@ -455,6 +464,13 @@ assert_not_contains "C14: no NNNN placeholder left" "id: NNNN"    "$NEWSPEC"
 # Next number increments past existing specs
 ( cd "$C14" && bash "$REPO/bin/prd" new second-thing >/dev/null 2>&1 )
 assert_file_exists "C14: second spec is 0002" "$C14/docs/specs/0002-second-thing.md"
+
+# non-kebab / traversal topics are rejected (no file written outside docs/specs)
+if ( cd "$C14" && bash "$REPO/bin/prd" new 'Bad/../Topic!' >/dev/null 2>&1 ); then
+  fail "C14: should reject non-kebab topic"
+else
+  pass "C14: rejects non-kebab topic"
+fi
 
 # ============================================================
 # CASE 15: prd list shows id · title · status from frontmatter
