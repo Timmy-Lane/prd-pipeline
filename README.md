@@ -53,8 +53,13 @@ curl -fsSL https://raw.githubusercontent.com/Timmy-Lane/prd-pipeline/main/instal
 | `prd install` | global install (above) |
 | `prd install --project DIR` | install just the skill into `DIR/.claude/skills/` (commit it with the repo) |
 | `prd update` | `git pull --ff-only` (if a clone) + reinstall |
+| `prd update --check` | report whether a newer release tag exists — **no pull, no mutation** |
 | `prd uninstall` | remove skill, rule, managed CLAUDE.md block, and the `prd` symlink |
-| `prd doctor` | show install status + dependency check |
+| `prd doctor` | show install status + dependency check + versions (clone vs installed, warns on drift) |
+| `prd version` | print the prd-pipeline version |
+| `prd notify on` / `off` / `status` | **opt-in** SessionStart update nudge (default off; ≤ 1 network check/day, cached) |
+| `prd new <topic>` | scaffold `docs/specs/NNNN-<topic>.md` from the skill's spec template |
+| `prd list` | list specs in `docs/specs/` (id · title · status) |
 
 ## Dependencies (checked by `prd doctor` and at runtime)
 
@@ -73,14 +78,15 @@ skills/prd-pipeline/
                                 PR-FAQ, Rust RFC, Oxide RFD, Shape Up, pre-mortem, spec-kit)
   references/spec-template.md   the default spec/PRD template
 rules/feature-workflow.md       the always-on rule (gate + worktree mandate)
-bin/prd                         install / update / uninstall / doctor
+bin/prd                         install / update[--check] / uninstall / doctor / version / notify / new / list
+VERSION                         single source of truth for the version (releases are git tags vX.Y.Z)
 install.sh                      bootstrap (clone + install)
 ```
 
 ## Security / trust
 
-- **No telemetry, no phone-home, no third-party downloads.** The only network operation is `git clone` / `git pull` of *this* repo over HTTPS (pinned in `install.sh`; the `PRD_REPO_URL` override is asserted to be `https://`). Reviewed for malware/exfiltration — clean.
-- `bin/prd` only writes under `~/.claude` + `~/.local/bin`, edits a clearly-marked managed block in `CLAUDE.md` (atomic write, skips if the end-marker is missing to avoid truncation), and never uses `eval` or executes downloaded content beyond this repo's own `bin/prd`.
+- **No telemetry, no phone-home, no third-party downloads, no data ever sent.** Network operations are limited to `git clone` / `git pull` of *this* repo over HTTPS (pinned in `install.sh`; the `PRD_REPO_URL` override is asserted to be `https://`) — **plus**, *only if you opt in with `prd notify on`*, a read-only `git ls-remote --tags` against the **same** repo (at most once/day, cached on disk; it sends no data and talks to no third party). A default install makes **no** `settings.json` edits and **no** network calls. Reviewed for malware/exfiltration — clean.
+- `bin/prd` only writes under `~/.claude` + `~/.local/bin`. It edits a clearly-marked managed block in `CLAUDE.md` (atomic write, skips if the end-marker is missing to avoid truncation). `prd notify on` adds an opt-in SessionStart hook to `~/.claude/settings.json` — parsed-or-aborted (a malformed file is left untouched), written atomically, and removed cleanly by `prd notify off` (your other hooks are preserved). It never uses `eval` or executes downloaded content beyond this repo's own `bin/prd`.
 - Prefer the **clone-then-inspect** install over `curl | bash`. Pin to a tagged release if you want a frozen version.
 
 ## Composes (doesn't reinvent)

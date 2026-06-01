@@ -1,11 +1,18 @@
 ---
 id: 0002
 title: version-update-cli
-status: draft        # draft → accepted → implemented | abandoned | superseded
+status: implemented
 author: durden
 created: 2026-06-01
 supersedes:
 ---
+
+> **Implemented 2026-06-01** (dogfood run of `/prd-pipeline`, subagent-driven). Shipped all four phases as 9 commits on `feat/0002-version-update-cli`: `VERSION` + symlink-safe paths + `prd version`; `doctor` two-version drift; `prd update --check`; `prd notify on|off|status` + SessionStart hook; `prd notify --hook` 24h-cache shim; `prd new`/`prd list`; help text. Smoke suite grew 48 → 84 assertions (CASE 9–16), green on the local run.
+>
+> **Scope deltas from the plan:**
+> - **Hook schema correction (load-bearing):** verification (via `claude-code-guide`) showed `SessionStart` hooks **require** a `matcher` — omitting it means the hook never fires. The plan's assumed shape had none. Shipped with `matcher: "startup"`, `timeout: 10`, and an **absolute** command path (`$BIN_DST/prd notify --hook`) since hooks may run with a minimal PATH.
+> - **JSON editor narrowed `python3`-or-`jq` → `python3`-or-manual.** python3 is universal on macOS/Linux/CI; a parallel jq merge would double the test surface on the riskiest operation. No python3 → print the exact JSON to paste, exit 1 (never hand-roll). The merge is parse-or-abort + atomic temp-then-`mv`.
+> - **Two latent bugs fixed in passing:** `prd doctor` leaked a shell error on a not-installed env (input redirection ordered before `2>/dev/null`); `latest_remote_tag` dropped the first digit of multi-digit *major* versions (greedy `.*` in the sed BRE → switched to `grep -oE`).
 
 # Version-aware `prd` CLI + update notifications
 
