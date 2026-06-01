@@ -328,6 +328,10 @@ C10="$TMPROOT/c10"
 mkdir -p "$C10/claude" "$C10/bin" "$C10/prd"
 export CLAUDE_HOME="$C10/claude"; export PRD_BIN_DIR="$C10/bin"; export PRD_HOME="$C10/prd"
 
+# doctor on a not-installed env must not leak shell errors to stderr
+ERR0="$(prd doctor 2>&1 >/dev/null)"
+assert_eq "C10: not-installed doctor has clean stderr" "" "$ERR0"
+
 prd install >/dev/null 2>&1
 assert_file_exists "C10: VERSION copied into skill dir" "$CLAUDE_HOME/skills/prd-pipeline/VERSION"
 

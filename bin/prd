@@ -143,7 +143,8 @@ cmd_doctor(){
   echo "  claude home: $CLAUDE_HOME"
   local clone_v inst_v
   clone_v="$(prd_version)"
-  inst_v="$(tr -d '[:space:]' < "$SKILLS_DST/prd-pipeline/VERSION" 2>/dev/null)"
+  inst_v=""
+  [ -f "$SKILLS_DST/prd-pipeline/VERSION" ] && inst_v="$(tr -d '[:space:]' < "$SKILLS_DST/prd-pipeline/VERSION")"
   echo "  version (clone):     ${clone_v:-unknown}"
   echo "  version (installed): ${inst_v:-not installed}"
   if [ -n "$clone_v" ] && [ -n "$inst_v" ] && [ "$clone_v" != "$inst_v" ]; then
