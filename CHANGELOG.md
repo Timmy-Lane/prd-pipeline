@@ -13,6 +13,8 @@ Version awareness + update notifications (spec `docs/specs/0002-version-update-c
 - Fix: symlink-safe path resolution so commands work through the installed `~/.local/bin/prd` symlink.
 - Fix: `prd doctor` no longer leaks a shell error on a not-installed environment.
 - Fix: SemVer parsing handles multi-digit major versions (e.g. `v100.2.3`).
+- Hardening: `prd notify --hook` survives a corrupted or hand-edited cache file — always exits 0, never breaks a session start.
+- Hardening: `prd new <topic>` validates kebab-case, rejecting topics that could inject into `sed` or traverse out of `docs/specs/`.
 
 ## 0.1.0 — 2026-05-30
 
