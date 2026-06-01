@@ -320,6 +320,28 @@ assert_eq "C9: prd version (via symlink)" "$EXPECT_VER" "$(bash "$PRD_BIN_DIR/pr
 prd uninstall >/dev/null 2>&1
 
 # ============================================================
+# CASE 10: doctor reports version + warns on drift
+# ============================================================
+printf '\n\033[1m[10] doctor version + drift\033[0m\n'
+
+C10="$TMPROOT/c10"
+mkdir -p "$C10/claude" "$C10/bin" "$C10/prd"
+export CLAUDE_HOME="$C10/claude"; export PRD_BIN_DIR="$C10/bin"; export PRD_HOME="$C10/prd"
+
+prd install >/dev/null 2>&1
+assert_file_exists "C10: VERSION copied into skill dir" "$CLAUDE_HOME/skills/prd-pipeline/VERSION"
+
+CLONE_VER="$(tr -d '[:space:]' < "$REPO/VERSION")"
+DOC="$(prd doctor 2>&1)"
+case "$DOC" in *"$CLONE_VER"*) pass "C10: doctor prints version" ;; *) fail "C10: doctor missing version" ;; esac
+
+# Seed a stale installed VERSION → doctor must warn about drift
+printf '0.0.1\n' > "$CLAUDE_HOME/skills/prd-pipeline/VERSION"
+DOC2="$(prd doctor 2>&1)"
+case "$DOC2" in *drift*) pass "C10: doctor warns on drift" ;; *) fail "C10: no drift warning" ;; esac
+prd uninstall >/dev/null 2>&1
+
+# ============================================================
 # Belt-and-suspenders: real CLAUDE.md must be untouched
 # ============================================================
 if [ -f "$REAL_CLAUDE_MD" ] && [ -f "$REAL_CLAUDE_SNAP" ]; then
