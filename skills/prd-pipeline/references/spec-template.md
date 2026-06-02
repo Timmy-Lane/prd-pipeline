@@ -12,6 +12,8 @@ supersedes:          # link the spec id this replaces, if any
 > Default spec template (used when the project defines none). Prose, not bullet dumps —
 > writing forces precision. Aim for ~2 pages; if it won't fit, it's too broad — split it.
 > T1 (light) specs need only the **bold** sections.
+> Every load-bearing number cites a source (research note / benchmark / ADR) or is tagged
+> `[ASSUMPTION]`; every Goal pairs with a roll-back invalidator below — Step 2.5 passes 8–9 enforce both.
 
 ## Problem / Context
 **What is broken or missing right now**, anchored in observable evidence (a metric, a log,
