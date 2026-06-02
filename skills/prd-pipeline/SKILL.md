@@ -49,6 +49,13 @@ plan before code touches disk.** Everything else serves that.
    phases for the chosen tier, in order. The list is your durable memory — it survives context
    compaction. Re-read this file and the spec file if you wake up unsure where you are.
 
+> **Lifecycle-field check.** Recovery and Step 6 read the spec's `status:` to know the phase.
+> If the adopted template carries status as prose (`**Status:** Draft`) instead of a
+> machine-readable `status:` frontmatter field, the **`TodoWrite`/task list is the authoritative
+> phase marker** — don't grep the doc to recover. When you create a spec from a fresh template,
+> prefer one with a parseable `status:` line so the lifecycle machinery (`draft→accepted→implemented`)
+> actually works.
+
 > **Run `/prd-pipeline` from *within* the target repo.** The worktree build (Step 5) uses the
 > *session's* git repo. Driving it against a different repo means managing worktrees by hand —
 > avoid it; `cd` into the repo you're building in first.
@@ -70,6 +77,13 @@ skip the gate on a one-way door.**
 If unsure between two tiers, **route up** — but never silently upgrade every change to T2.
 State the tier and one-line reason before proceeding.
 
+**Research-grounding axis (orthogonal to the tier).** Ask one more question: *does this spec rest
+on external/empirical claims* — benchmarks, vendor capabilities, "approach X beats Y", performance
+or accuracy numbers? If yes, a cited research pass is **required before Step 2** (`Skill(deep-research)`
+/ `deep-researcher`), and Step 2.5 pass 9 binds every claim to that corpus. A T2 built on unsourced
+assertions is the most common way a good-looking PRD turns out hollow — the structure is identical
+whether the numbers are sourced or invented, so only the binding gate tells them apart.
+
 ---
 
 ## Step 2 — Spec (T1/T2)
@@ -80,9 +94,11 @@ directory at `status: draft`, using the project template (fallback: `references/
 The spec is **committed on the feature branch in Step 5** alongside the implementation, so intent
 + code reach `main` together at ship — don't commit it to `main` up front.
 
-Synthesized section skeleton (bold = always; rest = when relevant): **Problem/Context**,
-**Goals & Non-Goals**, customer-framing (working-backwards, 1 paragraph), **Proposed
-solution + trade-offs**, metric delta / success criteria, alternatives considered,
+Synthesized section skeleton (bold = required; rest = when relevant). **The template's
+`(required)` markers are the authoritative required set — Pass 7 gates on them; the bold here
+just mirrors them, keep the two in sync):** **Problem/Context**, **Goals & Non-Goals**,
+customer-framing (working-backwards, 1 paragraph), **Proposed solution + trade-offs**, **metric
+delta / success criteria**, **alternatives considered** (required for T2),
 cross-cutting concerns (security/privacy/observability/cost/data), **Drawbacks / risks /
 hypothesis-invalidators** (observable conditions that mean *roll back*), **Wedge** (narrowest
 valuable slice), open questions. **Prose, not bullets** (writing forces precision). **Fits ~2
@@ -97,13 +113,16 @@ For T1 the spec is a one-pager (Problem · Goals/Non-Goals · Wedge · Success c
 Before the grill, run a mechanical consistency check so critics spend their cycles on novel
 problems — not ones a deterministic pass would catch in seconds. Spawn ONE read-only agent
 (tools `[Read, Write]` — Write only for its report) over the spec + `docs/adr/*` + the project's
-CLAUDE.md invariants. Six passes:
+CLAUDE.md invariants. Nine passes (1–6 generic consistency; 7–9 enforce this skill's signature disciplines deterministically, so a critic never has to *rediscover* a structural omission):
 1. **Ambiguity** — vague terms ("fast", "scalable") with no measurable criterion; unresolved `[NEEDS CLARIFICATION]` markers.
 2. **Underspecification** — requirements with no success criterion; references to undefined components.
 3. **Constitution alignment** — conflicts with project invariants (display conventions, config-vs-env, read-only DBs, etc.).
 4. **Coverage gaps** — spec requirements with no corresponding plan task (defer this pass until after Step 4 if the plan doesn't exist yet).
 5. **Inconsistency** — terminology drift vs ADRs; approaches conflicting with shipped specs.
 6. **Duplication** — near-duplicate requirements.
+7. **Template-section coverage** — every section the active template marks **`(required)`** is present AND non-empty (the default template tags them inline; a project template's own required set wins). A missing or stub required section (e.g. **Wedge**, **Alternatives considered** (T2), **Drawbacks/invalidators**) is **CRITICAL**. Don't leave this to interpretation under another pass — check the literal section set.
+8. **Invalidator presence** — the spec contains ≥1 hypothesis-invalidator stated as a triple: *observable condition → how it's measured → that it means roll back*. An aspirational target ("we aim for −25%") is NOT an invalidator. Zero such triples = **CRITICAL**. (Lens 2 of the grill critiques invalidator *quality*; this pass enforces their *existence*.)
+9. **Claim↔source binding** — every load-bearing quantitative/empirical claim (a number, "improves X by N%", "research shows", "industry-standard", a vendor capability) either cites a source (research note / benchmark / ADR), is the spec's own post-ship success criterion, or is tagged `[ASSUMPTION]`/`[NEEDS CLARIFICATION]`. An unsourced load-bearing number is **CRITICAL** — it's the line between a grounded spec and a plausible-sounding hollow one. (Reuses the Step 6.2b citation-verifier pattern at spec-time.)
 
 Output: `<spec-dir>/<spec>-analysis.md` — a findings table (severity · location · summary · fix).
 **CRITICAL findings block Step 3** (fix the spec inline first); HIGH/MED findings are passed as
@@ -122,8 +141,8 @@ Find problems; do NOT propose fixes (that's Step 4). Use the project grill skill
   lens — redundant critics hide failure modes, diverse lenses surface them:
   1. **Architecture/conflict** — contradicts an existing decision (ADR)? duplicates shipped
      scope? inconsistent with how the system works today? violates a project invariant?
-  2. **Edge-case/invalidator** — invalidators named but not measurable? success criteria
-     with no measurement plan? null/empty/race/restart/partial-failure/rate-limit/cap-exhaustion?
+  2. **Edge-case/invalidator** — is there ≥1 invalidator *at all*, and is it measurable?
+     success criteria with no measurement plan? null/empty/race/restart/partial-failure/rate-limit/cap-exhaustion?
   3. **Cost/ops/telemetry** — cost math shown? operator knobs in the right place (config vs
      env)? telemetry to query it later? backwards-compat for existing data?
   4. **Pre-mortem** — "it's a year later and this shipped and failed: list the causes." (+30%
@@ -263,7 +282,7 @@ its own throwaway branch if you want PR hygiene. Anything bigger gets the featur
 |---|---|
 | Spec intent | `superpowers:brainstorming` |
 | Deep research | `deep-research` skill / `deep-researcher` agent (project may pin another) |
-| Consistency gate (2.5) | read-only `Agent` — 6-pass spec × ADR × CLAUDE.md check (spec-kit `/analyze`) |
+| Consistency gate (2.5) | read-only `Agent` — 9-pass spec × ADR × CLAUDE.md check (spec-kit `/analyze`); passes 7–9 = template-coverage · invalidator-presence · claim↔source binding |
 | Grill | project grill skill (e.g. `grill-prd`) ‖ built-in parallel `deep-researcher` critics |
 | Architecture | project eng-review skill ‖ `Agent(subagent_type: Plan)` |
 | Plan grader (4.5) | grader `Agent` `[Read, Edit]` — judge→patch→re-judge ≤3, patch-never-regenerate (bad-research grader) |
