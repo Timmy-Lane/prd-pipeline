@@ -59,7 +59,8 @@ curl -fsSL https://raw.githubusercontent.com/Timmy-Lane/prd-pipeline/main/instal
 | `prd version` | print the prd-pipeline version |
 | `prd notify on` / `off` / `status` | **opt-in** SessionStart update nudge (default off; ≤ 1 network check/day, cached) |
 | `prd new <topic>` | scaffold `docs/specs/NNNN-<topic>.md` from the skill's spec template |
-| `prd list` | list specs in `docs/specs/` (id · title · status) |
+| `prd list [--status S]` | list specs in `docs/specs/` (id · title · status) with a count summary header; `--status` filters the rows |
+| `prd audit [--fix] [--json] [--stale-days N]` | check spec-lifecycle consistency (read-only). Flags missing/invalid `status`, dup/mismatched `id`, broken `supersedes` links, git desync (a `feat/NNNN-*` branch still at `draft`/`accepted`), and stale drafts. `--fix` applies only the one safe metadata fix (missing `status:` → `draft`, prompted) — **never deletes, renames, or moves a spec**. Exits non-zero on any ERROR (CI-friendly) |
 
 ## Dependencies (checked by `prd doctor` and at runtime)
 

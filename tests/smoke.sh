@@ -489,9 +489,122 @@ case "$LIST" in *0002*beta*implemented*) pass "C15: lists implemented spec" ;; *
 # ============================================================
 printf '\n\033[1m[16] help text\033[0m\n'
 HELP="$(bash "$REPO/bin/prd" --help 2>&1)"
-for v in version "update --check" notify new list; do
+for v in version "update --check" notify new list audit; do
   case "$HELP" in *"$v"*) pass "C16: help mentions $v" ;; *) fail "C16: help missing $v" ;; esac
 done
+
+# ============================================================
+# CASE 17: prd list count summary + --status filter
+# ============================================================
+printf '\n\033[1m[17] prd list summary + filter\033[0m\n'
+
+C17="$TMPROOT/c17-repo"; mkdir -p "$C17/docs/specs"
+printf '%b' '---\nid: 0001\ntitle: alpha\nstatus: draft\ncreated: 2026-01-01\n---\n'                         > "$C17/docs/specs/0001-alpha.md"
+printf '%b' '---\nid: 0002\ntitle: beta\nstatus: implemented\ncreated: 2026-01-01\n---\n> **Implemented 2026-01-02**\n' > "$C17/docs/specs/0002-beta.md"
+printf '%b' '---\nid: 0003\ntitle: gamma\nstatus: bogus\ncreated: 2026-01-01\n---\n'                          > "$C17/docs/specs/0003-gamma.md"
+S17="$( cd "$C17" && bash "$REPO/bin/prd" list 2>&1 )"
+case "$S17" in *total:3*) pass "C17: summary total:3" ;; *) fail "C17: no total:3 ($S17)" ;; esac
+case "$S17" in *draft:1*) pass "C17: summary draft:1" ;; *) fail "C17: no draft:1 ($S17)" ;; esac
+case "$S17" in *implemented:1*) pass "C17: summary implemented:1" ;; *) fail "C17: no implemented:1 ($S17)" ;; esac
+case "$S17" in *invalid:1*) pass "C17: bogus status counts as invalid:1" ;; *) fail "C17: no invalid:1 ($S17)" ;; esac
+F17="$( cd "$C17" && bash "$REPO/bin/prd" list --status draft 2>&1 )"
+case "$F17" in *alpha*) pass "C17: filter shows draft row" ;; *) fail "C17: filter dropped alpha ($F17)" ;; esac
+case "$F17" in *beta*) fail "C17: filter leaked non-draft beta ($F17)" ;; *) pass "C17: filter excludes non-draft rows" ;; esac
+if ( cd "$C17" && bash "$REPO/bin/prd" list --status >/dev/null 2>&1 ); then
+  fail "C17: --status with no value should error"
+else
+  pass "C17: --status requires a value"
+fi
+
+# ============================================================
+# CASE 18: prd audit — structural + referential ERRORs, exit code
+# ============================================================
+printf '\n\033[1m[18] prd audit\033[0m\n'
+
+C18="$TMPROOT/c18-repo"; mkdir -p "$C18/docs/specs"
+printf '%b' '---\nid: 0001\ntitle: clean\nstatus: accepted\ncreated: 2026-06-01\n---\n' > "$C18/docs/specs/0001-clean.md"
+A18="$( cd "$C18" && bash "$REPO/bin/prd" audit 2>&1 )" && AR18=0 || AR18=$?
+assert_eq "C18: clean repo exits 0" 0 "$AR18"
+case "$A18" in *ok*) pass "C18: clean repo reports ok" ;; *) fail "C18: clean not ok ($A18)" ;; esac
+# now seed problems: superseded w/o link, and id≠filename
+printf '%b' '---\nid: 0002\ntitle: orphan\nstatus: superseded\ncreated: 2026-06-01\nsupersedes:\n---\n'  > "$C18/docs/specs/0002-orphan.md"
+printf '%b' '---\nid: 0099\ntitle: mism\nstatus: draft\ncreated: 2026-06-01\n---\n'                      > "$C18/docs/specs/0003-mism.md"
+D18="$( cd "$C18" && bash "$REPO/bin/prd" audit 2>&1 )" && DR18=0 || DR18=$?
+assert_eq "C18: dirty repo exits 1" 1 "$DR18"
+case "$D18" in *supersedes*) pass "C18: flags superseded-without-link" ;; *) fail "C18: missed superseded link ($D18)" ;; esac
+case "$D18" in *"filename prefix"*) pass "C18: flags id/filename mismatch" ;; *) fail "C18: missed id-filename mismatch ($D18)" ;; esac
+
+# ============================================================
+# CASE 19: prd audit — git desync (branch ahead of status) WARN
+# ============================================================
+printf '\n\033[1m[19] prd audit git desync\033[0m\n'
+if command -v git >/dev/null 2>&1; then
+  C19="$TMPROOT/c19-repo"; mkdir -p "$C19/docs/specs"
+  printf '%b' '---\nid: 0007\ntitle: inflight\nstatus: draft\ncreated: 2026-06-01\n---\n' > "$C19/docs/specs/0007-inflight.md"
+  ( cd "$C19" && git init -q && git config user.email t@e && git config user.name t \
+      && git add -A && git commit -qm init && git branch feat/0007-inflight ) >/dev/null 2>&1
+  G19="$( cd "$C19" && bash "$REPO/bin/prd" audit 2>&1 )" && GR19=0 || GR19=$?
+  assert_eq "C19: branch-ahead is WARN only (exit 0)" 0 "$GR19"
+  case "$G19" in *feat/0007*) pass "C19: flags branch ahead of draft status" ;; *) fail "C19: missed branch desync ($G19)" ;; esac
+else
+  pass "C19: skipped (git not available)"
+fi
+
+# ============================================================
+# CASE 20: prd audit --fix — only safe fix (missing status → draft)
+# ============================================================
+printf '\n\033[1m[20] prd audit --fix\033[0m\n'
+
+C20="$TMPROOT/c20-repo"; mkdir -p "$C20/docs/specs"
+printf '%b' '---\nid: 0001\ntitle: nostatus\ncreated: 2026-06-01\n---\n# body\n' > "$C20/docs/specs/0001-nostatus.md"
+printf 'n\n' | ( cd "$C20" && bash "$REPO/bin/prd" audit --fix ) >/dev/null 2>&1 || true
+assert_not_contains "C20: decline leaves file unchanged" "status: draft" "$C20/docs/specs/0001-nostatus.md"
+printf 'y\n' | ( cd "$C20" && bash "$REPO/bin/prd" audit --fix ) >/dev/null 2>&1 || true
+assert_contains "C20: accept inserts status: draft" "status: draft" "$C20/docs/specs/0001-nostatus.md"
+assert_contains "C20: fix preserves id"   "id: 0001" "$C20/docs/specs/0001-nostatus.md"
+assert_contains "C20: fix preserves body" "# body"   "$C20/docs/specs/0001-nostatus.md"
+
+# ============================================================
+# CASE 21: prd audit --json — machine-readable findings + exit code
+# ============================================================
+printf '\n\033[1m[21] prd audit --json\033[0m\n'
+
+C21="$TMPROOT/c21-repo"; mkdir -p "$C21/docs/specs"
+printf '%b' '---\nid: 0001\ntitle: a\nstatus: weird\ncreated: 2026-06-01\n---\n' > "$C21/docs/specs/0001-a.md"
+J21="$( cd "$C21" && bash "$REPO/bin/prd" audit --json 2>&1 )" && JR21=0 || JR21=$?
+case "$J21" in *'"severity":"ERROR"'*) pass "C21: json carries severity" ;; *) fail "C21: json missing severity ($J21)" ;; esac
+case "$J21" in *'"code":"invalid-status"'*) pass "C21: json carries code" ;; *) fail "C21: json missing code ($J21)" ;; esac
+assert_eq "C21: json mode still exits 1 on error" 1 "$JR21"
+
+# ============================================================
+# CASE 22: staleness — exercises the BSD/GNU date math on THIS platform
+# ============================================================
+printf '\n\033[1m[22] prd audit staleness\033[0m\n'
+
+C22="$TMPROOT/c22-repo"; mkdir -p "$C22/docs/specs"
+printf '%b' '---\nid: 0001\ntitle: ancient\nstatus: draft\ncreated: 2020-01-01\n---\n' > "$C22/docs/specs/0001-ancient.md"
+# --json carries the machine code "stale" (the text view prints the human message);
+# it only appears if date_to_epoch produced a real number > the threshold.
+S22="$( cd "$C22" && bash "$REPO/bin/prd" audit --json 2>/dev/null )" && true || true
+case "$S22" in *'"code":"stale"'*) pass "C22: flags stale draft (date_to_epoch works on this OS)" ;; *) fail "C22: missed stale draft — date math broken? ($S22)" ;; esac
+S22B="$( cd "$C22" && bash "$REPO/bin/prd" audit --json --stale-days 99999 2>/dev/null )" && true || true
+case "$S22B" in *'"code":"stale"'*) fail "C22: --stale-days threshold not honored ($S22B)" ;; *) pass "C22: --stale-days raises the threshold" ;; esac
+
+# ============================================================
+# CASE 23: prd audit — remaining checks (dup id, dangling link, impl marker)
+# ============================================================
+printf '\n\033[1m[23] prd audit remaining checks\033[0m\n'
+
+C23="$TMPROOT/c23-repo"; mkdir -p "$C23/docs/specs"
+printf '%b' '---\nid: 0005\ntitle: dupa\nstatus: draft\ncreated: 2026-06-01\n---\n'                       > "$C23/docs/specs/0005-dupa.md"
+printf '%b' '---\nid: 0005\ntitle: dupb\nstatus: draft\ncreated: 2026-06-01\n---\n'                       > "$C23/docs/specs/0006-dupb.md"
+printf '%b' '---\nid: 0007\ntitle: dangle\nstatus: draft\ncreated: 2026-06-01\nsupersedes: 9999\n---\n'   > "$C23/docs/specs/0007-dangle.md"
+printf '%b' '---\nid: 0008\ntitle: nomark\nstatus: implemented\ncreated: 2026-06-01\n---\nno marker\n'    > "$C23/docs/specs/0008-nomark.md"
+J23="$( cd "$C23" && bash "$REPO/bin/prd" audit --json 2>/dev/null )" && JR23=0 || JR23=$?
+case "$J23" in *duplicate-id*)          pass "C23: flags duplicate id" ;;            *) fail "C23: missed duplicate id ($J23)" ;; esac
+case "$J23" in *supersedes-dangling*)   pass "C23: flags dangling supersedes" ;;     *) fail "C23: missed dangling supersedes ($J23)" ;; esac
+case "$J23" in *implemented-no-marker*) pass "C23: flags implemented w/o marker" ;;  *) fail "C23: missed implemented-no-marker ($J23)" ;; esac
+assert_eq "C23: dirty fixture exits 1 (has ERRORs)" 1 "$JR23"
 
 # ============================================================
 # Belt-and-suspenders: real CLAUDE.md must be untouched

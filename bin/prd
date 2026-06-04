@@ -275,19 +275,229 @@ cmd_new() {
   green "created $out"
 }
 
+# ---------------------------------------------------------------------------
+# Spec corpus helpers (shared by list + audit). Frontmatter is parsed the same
+# way cmd_new does — first matching line, trailing "# comment" + ws stripped.
+# Specs are append-only (SKILL.md); nothing here deletes, renames, or archives.
+# ---------------------------------------------------------------------------
+SPEC_DIR="docs/specs"
+VALID_STATUS="draft accepted implemented superseded abandoned"
+
+spec_field() {  # spec_field FILE KEY -> value (trailing comment + surrounding ws stripped)
+  sed -n "s/^$2: *//p" "$1" 2>/dev/null | head -1 | sed -e 's/[[:space:]]*#.*//' -e 's/[[:space:]]*$//'
+}
+spec_status() { spec_field "$1" status | tr -d '[:space:]'; }   # single token
+is_valid_status() { case " $VALID_STATUS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
+# YYYY-MM-DD -> epoch seconds (GNU `date -d` + BSD `date -j`); empty on failure.
+# Probe with a concrete BSD `-j -f` parse of a fixed date (GNU date has no -j) rather
+# than relying on bare `date -j`, whose no-arg behaviour is version-dependent.
+date_to_epoch() {
+  if date -j -f '%Y-%m-%d' '1970-01-01' +%s >/dev/null 2>&1; then
+    date -j -f '%Y-%m-%d' "$1" +%s 2>/dev/null   # BSD / macOS
+  else
+    date -d "$1" +%s 2>/dev/null                  # GNU / Linux
+  fi
+}
+days_since() {  # YYYY-MM-DD -> whole days until today; nonzero/empty if uncomputable
+  local d="$1" now t0
+  case "$d" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) return 1 ;; esac
+  now="$(date +%s 2>/dev/null)" || return 1
+  t0="$(date_to_epoch "$d")" || t0=""
+  [ -n "$t0" ] || return 1
+  echo $(( (now - t0) / 86400 ))
+}
+
 cmd_list() {
-  local dir="docs/specs"
+  local want_status=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --status) shift; [ $# -gt 0 ] || { err "usage: prd list --status <status>"; exit 1; }; want_status="$1" ;;
+      --status=*) want_status="${1#*=}" ;;
+      *) err "usage: prd list [--status <status>]"; exit 1 ;;
+    esac
+    shift
+  done
+  local dir="$SPEC_DIR"
   [ -d "$dir" ] || { dim "  no $dir/ in $(pwd)"; return 0; }
-  local f id title status found=0
+  local f status any=0
+  local total=0 c_draft=0 c_accepted=0 c_implemented=0 c_abandoned=0 c_superseded=0 c_invalid=0
   for f in "$dir"/*.md; do
     [ -f "$f" ] || continue
-    found=1
-    id="$(sed -n 's/^id: *//p' "$f" | head -1)"
-    title="$(sed -n 's/^title: *//p' "$f" | head -1)"
-    status="$(sed -n 's/^status: *//p' "$f" | head -1 | sed 's/[[:space:]]*#.*//' | tr -d '[:space:]')"
+    any=1; total=$((total+1)); status="$(spec_status "$f")"
+    case "$status" in
+      draft)       c_draft=$((c_draft+1)) ;;
+      accepted)    c_accepted=$((c_accepted+1)) ;;
+      implemented) c_implemented=$((c_implemented+1)) ;;
+      abandoned)   c_abandoned=$((c_abandoned+1)) ;;
+      superseded)  c_superseded=$((c_superseded+1)) ;;
+      *)           c_invalid=$((c_invalid+1)) ;;
+    esac
+  done
+  if [ "$any" != 1 ]; then dim "  no specs in $dir/"; return 0; fi
+  local filt=""; [ -n "$want_status" ] && filt="  (showing: $want_status)"
+  printf '  specs in %s/ — total:%d  draft:%d  accepted:%d  implemented:%d  abandoned:%d  superseded:%d  invalid:%d%s\n' \
+    "$dir" "$total" "$c_draft" "$c_accepted" "$c_implemented" "$c_abandoned" "$c_superseded" "$c_invalid" "$filt"
+  local id title
+  for f in "$dir"/*.md; do
+    [ -f "$f" ] || continue
+    status="$(spec_status "$f")"
+    [ -z "$want_status" ] || [ "$status" = "$want_status" ] || continue
+    id="$(spec_field "$f" id)"; title="$(spec_field "$f" title)"
     printf '  %-6s %-28s %s\n' "${id:-?}" "${title:-?}" "${status:-?}"
   done
-  [ "$found" = 1 ] || dim "  no specs in $dir/"
+}
+
+# prd audit — read-only spec-lifecycle consistency check. Exits 1 if any ERROR.
+# --fix applies only the one safe metadata fix (missing status: -> draft, [y/N]);
+# everything else prints a suggested manual action. Never deletes/renames.
+cmd_audit() {
+  local fix=0 json=0 stale_days=30
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --fix) fix=1 ;;
+      --json) json=1 ;;
+      --stale-days) shift; [ $# -gt 0 ] || { err "--stale-days needs a value"; exit 1; }; stale_days="$1" ;;
+      --stale-days=*) stale_days="${1#*=}" ;;
+      -h|--help) echo "usage: prd audit [--fix] [--json] [--stale-days N]"; return 0 ;;
+      *) err "unknown audit flag: $1 (try: prd audit --help)"; exit 1 ;;
+    esac
+    shift
+  done
+  case "$stale_days" in ''|*[!0-9]*) err "--stale-days needs a non-negative integer"; exit 1 ;; esac
+
+  local dir="$SPEC_DIR"
+  if [ ! -d "$dir" ]; then
+    if [ "$json" = 1 ]; then echo "[]"; else dim "  no $dir/ in $(pwd)"; fi
+    return 0
+  fi
+
+  # git is optional here; desync checks degrade gracefully when absent
+  local have_git=0 branches=""
+  if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
+    have_git=1
+    branches="$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null || true)"
+  fi
+
+  # findings: SEVERITY|FILE|CODE|MESSAGE (one per line). idx: ID|STATUS|FILE.
+  local findings="" errors=0 warns=0
+  add_finding() {  # sev file code msg
+    findings="$findings$1|$2|$3|$4
+"
+    case "$1" in ERROR) errors=$((errors+1)) ;; WARN) warns=$((warns+1)) ;; esac
+  }
+
+  local f idx="" id status
+  for f in "$dir"/*.md; do
+    [ -f "$f" ] || continue
+    id="$(spec_field "$f" id)"; status="$(spec_status "$f")"
+    idx="$idx$id|$status|$f
+"
+  done
+  local dup
+  dup="$(printf '%s' "$idx" | awk -F'|' '$1!=""{print $1}' | sort | uniq -d)"
+
+  local base fnum title sup tgt_status created days
+  for f in "$dir"/*.md; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f")"; fnum="${base%%-*}"
+    id="$(spec_field "$f" id)"; title="$(spec_field "$f" title)"
+    status="$(spec_status "$f")"; sup="$(spec_field "$f" supersedes)"
+
+    # structure / vocabulary / dupes
+    if [ -z "$status" ]; then
+      add_finding ERROR "$f" missing-status "no status: field (lifecycle machinery degrades to a manual list)"
+    elif ! is_valid_status "$status"; then
+      add_finding ERROR "$f" invalid-status "status '$status' not in {$VALID_STATUS}"
+    fi
+    [ -n "$id" ]    || add_finding ERROR "$f" missing-id    "no id: field"
+    [ -n "$title" ] || add_finding ERROR "$f" missing-title "no title: field"
+    if [ -n "$id" ] && [ -n "$fnum" ] && [ "$id" != "$fnum" ]; then
+      add_finding ERROR "$f" id-filename-mismatch "id:$id != filename prefix $fnum (rename the file or fix id:)"
+    fi
+    if [ -n "$id" ] && printf '%s\n' "$dup" | grep -qx "$id"; then
+      add_finding ERROR "$f" duplicate-id "id:$id is used by more than one spec"
+    fi
+
+    # referential integrity (append-only: superseded/abandoned link forward)
+    if [ "$status" = superseded ] && [ -z "$sup" ]; then
+      add_finding ERROR "$f" superseded-no-link "status superseded but supersedes: is empty (add the id it replaces)"
+    fi
+    if [ -n "$sup" ]; then
+      if ! printf '%s' "$idx" | awk -F'|' '{print $1}' | grep -qx "$sup"; then
+        add_finding ERROR "$f" supersedes-dangling "supersedes:$sup has no matching spec"
+      else
+        tgt_status="$(printf '%s' "$idx" | awk -F'|' -v t="$sup" '$1==t{print $2; exit}')"
+        if [ -n "$tgt_status" ] && [ "$tgt_status" != superseded ]; then
+          add_finding WARN "$f" supersede-target-live "supersedes:$sup but $sup is still '$tgt_status', not superseded"
+        fi
+      fi
+    fi
+
+    # git desync — only the valid polarity (branch alive but status not advanced).
+    # "implemented but no branch" is the SUCCESS state (workflow deletes merged
+    # branches), so we verify an implemented claim via the body marker instead.
+    if [ "$have_git" = 1 ] && [ -n "$id" ]; then
+      if printf '%s\n' "$branches" | grep -qE "^feat/$id([/-]|$)"; then
+        case "$status" in
+          draft|accepted) add_finding WARN "$f" branch-ahead-of-status "feat/$id-* branch exists but spec still '$status' (bump the status?)" ;;
+        esac
+      fi
+    fi
+    if [ "$status" = implemented ] && ! grep -qF '**Implemented' "$f"; then
+      add_finding WARN "$f" implemented-no-marker "status implemented but no '> **Implemented ...**' marker in the body (unverified claim)"
+    fi
+
+    # staleness — a draft/accepted spec left dangling
+    case "$status" in
+      draft|accepted)
+        created="$(spec_field "$f" created)"
+        if [ -n "$created" ]; then
+          days="$(days_since "$created" 2>/dev/null || true)"
+          if [ -n "$days" ] && [ "$days" -gt "$stale_days" ] 2>/dev/null; then
+            add_finding WARN "$f" stale "status '$status' and $days days old (> $stale_days; pick it up or abandon it)"
+          fi
+        fi
+        ;;
+    esac
+
+    # the one safe auto-fix: a spec with frontmatter but no status: line -> draft
+    if [ "$fix" = 1 ] && [ -z "$status" ] && head -1 "$f" | grep -q '^---[[:space:]]*$'; then
+      printf '  fix %s: insert "status: draft" after the opening --- ? [y/N] ' "$f" >&2
+      local ans; read -r ans || ans=""
+      case "$ans" in
+        y|Y) awk 'BEGIN{n=0} /^---[[:space:]]*$/{n++; print; if(n==1) print "status: draft"; next} {print}' "$f" > "$f.tmp" \
+               && mv "$f.tmp" "$f" && green "  fixed $f (status: draft)" \
+               || { rm -f "$f.tmp"; err "  fix failed for $f"; } ;;
+        *) dim "  skipped $f" ;;
+      esac
+    fi
+  done
+
+  if [ "$json" = 1 ]; then
+    printf '['
+    printf '%s' "$findings" | { first=1; while IFS='|' read -r sev file code msg; do
+      [ -n "$sev" ] || continue
+      [ "$first" = 1 ] || printf ','
+      first=0
+      ef="$(printf '%s' "$file" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+      em="$(printf '%s' "$msg"  | sed 's/\\/\\\\/g; s/"/\\"/g')"
+      printf '{"severity":"%s","file":"%s","code":"%s","message":"%s"}' "$sev" "$ef" "$code" "$em"
+    done; }
+    printf ']\n'
+  elif [ -z "$findings" ]; then
+    green "  prd audit: ok (no issues)"
+  else
+    printf '%s' "$findings" | while IFS='|' read -r sev file code msg; do
+      [ -n "$sev" ] || continue
+      case "$sev" in
+        ERROR) printf '  \033[31mERROR\033[0m %s — %s\n' "$file" "$msg" ;;
+        WARN)  printf '  \033[33mWARN\033[0m  %s — %s\n' "$file" "$msg" ;;
+      esac
+    done
+    printf '  %d error(s), %d warning(s)\n' "$errors" "$warns"
+  fi
+  [ "$errors" -gt 0 ] && return 1 || return 0
 }
 
 prd_version() { tr -d '[:space:]' < "$REPO_ROOT/VERSION" 2>/dev/null; }
@@ -323,7 +533,8 @@ main(){
     doctor)    cmd_doctor ;;
     notify)    cmd_notify "$@" ;;
     new)       cmd_new "$@" ;;
-    list)      cmd_list ;;
+    list)      cmd_list "$@" ;;
+    audit)     cmd_audit "$@" ;;
     version|--version|-v) cmd_version ;;
     ""|-h|--help|help)
       cat <<'USAGE'
@@ -335,7 +546,8 @@ usage: prd <command>
   version                   print the prd-pipeline version
   notify {on|off|status}    opt-in SessionStart update nudge (<=1 network check/day)
   new <topic>               scaffold docs/specs/NNNN-<topic>.md from the template
-  list                      list specs (id, title, status)
+  list [--status S]         list specs + count summary (filter rows by status)
+  audit [--fix] [--json]    check spec-lifecycle consistency (--stale-days N; --fix: safe metadata only)
 USAGE
       ;;
     *) err "unknown command: $sub"; err "run: prd --help"; exit 1 ;;

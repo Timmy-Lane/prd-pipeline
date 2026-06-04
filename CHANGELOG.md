@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0 — 2026-06-04
+
+Spec-corpus visibility + a consistency audit (spec `docs/specs/0003-prd-audit.md`). Until now the repo accumulated specs with no at-a-glance view of the corpus and nothing that checked a spec's declared lifecycle state was still internally consistent or true.
+
+- `prd list` now prints a **count summary** header (`total` + per-status tally + `invalid`) and takes `--status S` to filter the rows. Reuses the existing frontmatter extraction — no second parser.
+- `prd audit` — **read-only** spec-lifecycle consistency check. Findings grouped by severity; exits non-zero on any ERROR (CI-friendly):
+  - **ERROR** — missing/unparseable `status`, `status` outside `{draft,accepted,implemented,abandoned,superseded}`, missing `id`/`title`, duplicate `id`, `id` ≠ filename prefix; `superseded` with no `supersedes:`, `supersedes:` → a non-existent id.
+  - **WARN** — git desync (a `feat/NNNN-*` branch exists but the spec is still `draft`/`accepted`), `implemented` without a `> **Implemented …**` body marker, and `draft`/`accepted` specs older than `--stale-days N` (default 30). Git checks degrade gracefully outside a git repo.
+- `prd audit --fix` applies only the **one** genuinely safe fix (a spec with frontmatter but no `status:` line → `status: draft`), behind a `[y/N]` prompt. Every other finding prints a suggested manual action. **Specs stay append-only — nothing is deleted, renamed, or moved.**
+- `prd audit --json` emits machine-readable findings (validated parseable) while preserving the exit code, for hooks/CI.
+- Design note (git-check polarity): "`implemented` but no branch" is the *success* state — the workflow deletes merged branches — so an implemented claim is verified via the body marker, not branch existence. The audit reports clean on the repo's own `implemented` specs (0001, 0002).
+- Smoke suite grows 84 → 115 assertions (CASE 17–23), including an isolated `git init` + branch fixture for the desync check and a positive staleness case that exercises the BSD/GNU date math on each CI leg. BSD+GNU portable.
+- Review hardening: `date_to_epoch` probes BSD support with a concrete `date -j -f` parse of a fixed date (not bare `date -j`, whose no-arg behaviour is version-dependent); `prd list --status` / `prd audit --stale-days` now reject a missing value instead of silently no-opping; the `list` summary appends `(showing: …)` when filtered.
+
 ## 0.3.0 — 2026-06-02
 
 Stronger pre-acceptance gates in the `prd-pipeline` skill — three of the skill's "signature disciplines" were enforced only by scattered prose, so compliance was interpretation-dependent (a diligent agent caught them, a compacted/rushed one didn't). Made them explicit, mandatory Step 2.5 passes (pass 7 is deterministic; 8–9 are judgment-guided but now required, not optional). Validated RED→GREEN, then held under three combined-pressure subagent scenarios (authority+time / sunk-cost / spirit-vs-letter) on a deliberately-defective Tier-2 spec.
