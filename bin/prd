@@ -76,7 +76,7 @@ symlink_cli(){
 cmd_install_global(){
   mkdir -p "$SKILLS_DST" "$RULES_DST"
   rm -rf "$SKILLS_DST/prd-pipeline"
-  cp -R "$REPO_ROOT/skills/prd-pipeline" "$SKILLS_DST/"
+  cp -R "$REPO_ROOT/plugins/prd-pipeline/skills/prd-pipeline" "$SKILLS_DST/"
   cp "$REPO_ROOT/VERSION" "$SKILLS_DST/prd-pipeline/VERSION" 2>/dev/null || true
   cp "$REPO_ROOT/rules/feature-workflow.md" "$RULES_DST/feature-workflow.md"
   wire_claude_md
@@ -94,7 +94,7 @@ cmd_install_project(){
   [ -d "$proj" ] || { err "no such directory: $proj"; exit 1; }
   mkdir -p "$proj/.claude/skills"
   rm -rf "$proj/.claude/skills/prd-pipeline"
-  cp -R "$REPO_ROOT/skills/prd-pipeline" "$proj/.claude/skills/"
+  cp -R "$REPO_ROOT/plugins/prd-pipeline/skills/prd-pipeline" "$proj/.claude/skills/"
   green "installed prd-pipeline skill into $proj/.claude/skills/  (commit it with the repo)."
   dim "  the feature-workflow rule stays global; project skills override global on conflict."
 }
@@ -154,16 +154,17 @@ cmd_uninstall(){
 check_deps(){
   echo "  dependencies:"
   if command -v git >/dev/null 2>&1; then green "    git            ok  (REQUIRED — worktree mandate)"; else err "    git            MISSING — REQUIRED for the worktree build; install git"; fi
-  if grep -qsE '"superpowers@[^"]*": *true' "$CLAUDE_HOME/settings.json" 2>/dev/null \
-     || ls "$CLAUDE_HOME"/plugins/cache/*/superpowers/*/skills/brainstorming/SKILL.md >/dev/null 2>&1; then
-    green "    superpowers    ok  (brainstorming · writing-plans · dispatching-parallel-agents · TDD · verification · finishing-a-branch)"
+  if grep -qsE '"compound-v[@"]' "$CLAUDE_HOME/settings.json" 2>/dev/null \
+     || ls "$CLAUDE_HOME"/plugins/cache/*/compound-v/*/skills/brainstorming/SKILL.md >/dev/null 2>&1; then
+    green "    compound-v     ok  (brainstorming · writing-plans · batched-implementation · TDD · verification · finishing)"
   else
-    dim  "    superpowers    missing — install the 'superpowers' plugin for the best composer; prd-pipeline still runs with built-in fallbacks"
+    dim  "    compound-v     missing — bundled as a prd-pipeline plugin dependency; install via '/plugin install prd-pipeline@prd-pipeline'. Built-in fallbacks otherwise."
   fi
-  if find "$CLAUDE_HOME" -type d -iname deep-research 2>/dev/null | grep -q .; then
-    green "    deep-research  ok  (research / grill engine)"
+  if ls "$CLAUDE_HOME"/plugins/cache/*/bad-research/*/skills/bad-research/SKILL.md >/dev/null 2>&1 \
+     || find "$CLAUDE_HOME" -type d -iname bad-research 2>/dev/null | grep -q .; then
+    green "    bad-research   ok  (deep-research engine; Python CLI self-bootstraps on first use)"
   else
-    dim  "    deep-research  missing — falls back to the deep-researcher agent / web tools"
+    dim  "    bad-research   missing — bundled as a prd-pipeline plugin dependency; falls back to native web search"
   fi
 }
 
@@ -250,8 +251,8 @@ cmd_notify() {
 }
 
 spec_template() {
-  if [ -f "$REPO_ROOT/skills/prd-pipeline/references/spec-template.md" ]; then
-    echo "$REPO_ROOT/skills/prd-pipeline/references/spec-template.md"
+  if [ -f "$REPO_ROOT/plugins/prd-pipeline/skills/prd-pipeline/references/spec-template.md" ]; then
+    echo "$REPO_ROOT/plugins/prd-pipeline/skills/prd-pipeline/references/spec-template.md"
   else
     echo "$SKILLS_DST/prd-pipeline/references/spec-template.md"
   fi

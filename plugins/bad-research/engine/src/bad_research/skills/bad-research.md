@@ -1,0 +1,392 @@
+---
+name: bad-research
+description: >
+  Use when a question needs deep, multi-source, fully-cited research — literature
+  reviews, comparative analyses, explainers that need primary sources, or
+  questions that require synthesizing conflicting expert views into a defended
+  answer. Behavior is tier-adaptive: a simple, bounded question gets a fast cited
+  answer in minutes, while a broad or contested one gets the full
+  adversarially-reviewed report. Output is a single grounded report with every
+  factual claim bound to a source.
+---
+
+# Bad Research — multi-skill chain orchestrator
+
+You are the orchestrator (Opus). Your entire job in this conversation is:
+1. Read this file once at the start.
+2. Bootstrap canonical inputs (research_query, vault_tag, scaffold).
+3. Invoke each step skill in sequence via the `Skill` tool.
+4. Between steps, do nothing except mark todos and (optionally) think to `research/temp/orchestrator-notes.md`.
+
+You do NOT do the work of any step yourself. The step skills do. You just sequence them.
+
+---
+
+## How the chain works (READ THIS CAREFULLY)
+
+Each pipeline step is its own skill file. To run a step:
+
+```
+Skill(skill: "bad-research-N-stepname")
+```
+
+When you invoke a Skill, that skill's full procedure is loaded into your context **fresh**. You then execute that step's procedure, hit its exit criterion, and return to the entry skill (this file) to invoke the next step.
+
+**Why this design?** It is compaction-resistant: each step's procedure is loaded into context **only at the moment it's needed**, fresh, so a long run can't evict the procedure before the step that needs it.
+
+**The integer-numbered step skills** (all prefixed `bad-research-`; the half-steps and route skills follow in the next two tables, and the full route runs the full-tier stage sequence in "Complete pipeline order" below — more stages than this integer-only list):
+
+| # | Skill name | What it does | Tiers |
+|---|---|---|---|
+| 1 | `bad-research-1-decompose` | Canonical query → scaffold + decomposition + coverage matrix + tier classification | all |
+| 2 | `bad-research-2-width-sweep` | Multi-perspective search plan + parallel fetcher waves | all |
+| 3→4* (merged) | `bad-research-4-loci-analysis` | Step 4.0 preamble: contradiction graph (pair contradictions → ranked fight clusters + consensus); Step 4.1+: 2 loci-analysts → scored loci.json with source budgets | full |
+| 5 | `bad-research-5-depth-investigation` | K depth-investigators in parallel → interim notes with committed positions | full |
+| 6→7* (merged) | `bad-research-6-cross-locus-reconcile` | Reconcile committed positions into cross-locus tensions; Step 6.5: scan source bodies for orphan tensions → single richer `research/temp/tensions.md` | full |
+| 8 | `bad-research-8-corpus-critic` | "What source would overturn this?" + targeted gap-fill fetch | full |
+| 9→10* (merged) | `bad-research-10-triple-draft` | Step 10.0b Part 2 builds the evidence digest inline (top claims + verbatim quotes → evidence-digest.md, formerly step 9); then per-angle source curation + 3 parallel draft-orchestrators (3 angle-specific drafts) | all |
+| 11 | `bad-research-11-synthesize` | Synthesis plan + outline + spawn synthesizer subagent (two-pass write) → final_report.md | full |
+| 12 | `bad-research-12-critics` | 5 adversarial critics in parallel (dialectic, depth, width, instruction, assumption) → findings JSONs | full |
+| 13 | `bad-research-13-gap-fetch` | Fetch sources for critic-identified vault gaps | full |
+| 14 | `bad-research-14-patcher` | Surgical Edit hunks applied to draft | full |
+| 15 | `bad-research-15-polish` | Hygiene + filler pass (Edit-based subagent) | all |
+| 16 | `bad-research-16-readability-audit` | Readability recommender writes JSON suggestions; orchestrator selectively applies via Edit | all |
+
+**Half-steps** sit between the integer steps and are not in the table above:
+
+| # | Skill name | What it does | Tiers |
+|---|---|---|---|
+| 0.5 | `bad-research-0.5-clarify` | Triage clarifier — ≤3 default-proceed questions before decompose | all (skipped only on `--auto`/wrapped runs) |
+| 1.5 | `bad-research-query-router` | Classify the decomposition into a route (`fast` / `full`) | all |
+| 1.6 | `bad-research-1.6-plan-gate` | User-editable plan-gate — emit the plan, pause for approve/edit/proceed | interactive + full-route-or-broad-survey only (skipped on non-interactive / `--auto` / wrapped / small bounded runs) |
+| 11.5 | `bad-research-11.5-citation-verifier` | Backward grounding — bind every claim to a source note | full |
+| 12.5 | `bad-research-12.5-grader` | In-pipeline grader loop (judge → patch → re-judge, ≤3) — runs AFTER 13 despite its number (see the route table) | full |
+| 14.5 | `bad-research-fresh-review` | One fresh-context review pass | full |
+| — | `bad-research-fast` | The bounded-ReAct fast mode (a *route*, not a numbered step — replaces steps 2–14 when route == `fast`) | fast |
+| — | `bad-research-ultrafast` | The commercial-DR middle tier (a *route* — plan → K parallel researchers → leader synthesis; replaces steps 2–14 when route == `ultrafast`) | ultrafast |
+
+**Complete pipeline order (full tier), half-steps included:**
+
+```
+0.5 → 1 → 1.5 → 1.6 → 2 → 4* → 5 → 6* → 8 → 10* → 11 → 11.5
+    → 12 → 13 → 12.5 → 14 → 14.5 → 15 → 16(+gate)
+```
+
+`fast` runs `0.5 → 1 → 1.5 → bad-research-fast → slim citation-grounding → 12(slim critic) → 15 → 16(+gate)`. Step 1.6 (plan-gate) is present in the interactive full-route-or-broad-survey path and is a no-op (skipped) on every non-interactive / `--auto` / wrapped / small bounded run; it is not in the `fast` path. Step 12 on the `fast` route is the **slim single adversarial critic** (E3) — one dialectic+instruction pass, no 5-critic fan-out, no patcher — NOT the full-tier critique. See the per-route table below for each route's depth.
+
+---
+
+## Tier routing
+
+Step 1 decomposes the query; the query-router (step 1.5) classifies the
+decomposition into a `route` (`fast` / `full`) written to
+`research/prompt-decomposition.json`. The **fast route** is the bounded
+planner→writer loop (shape-aware, ± breadth fan-out, slim citation-grounding,
+one adversarial pass); the **full tier** is the
+deep path (triple-draft ensemble + synthesis + adversarial critics + grader loop
++ fresh review). After step 1.5, **read that file** for the
+`route`, then sequence steps according to this mode table:
+
+| Route | Step sequence | Depth |
+|---|---|---|
+| `fast` | 0.5 → 1 → 1.5 → bad-research-fast (shape-aware loop ± breadth fan-out) → slim citation-grounding → 12(slim critic) → 15 → 16(+gate) | quick, bounded, single-pass |
+| `ultrafast` | 1 → 1.5 → bad-research-ultrafast (plan → K≤6 parallel researchers → leader synthesis) → slim citation-grounding → 12(slim critic) → 15 → 16(+gate) | mid, broad, autonomous (5–15 min); explicit `--ultrafast` only |
+| `full` | 0.5 → 1 → 1.5 → 1.6 → 2 → 4* → 5 → 6* → 8 → 10* → 11 → 11.5 → 12 → 13 → 12.5 → 14 → 14.5 → 15 → 16(+gate+recitation) | deep, contested, adversarially-audited |
+
+**On `ultrafast` (the commercial-DR middle tier):** it is **never auto-selected** —
+`classify_route` only emits `fast`/`full`. It is forced two ways, resolved at
+bootstrap: (a) the **`--ultrafast` flag** (the orchestrator runs `bad route --apply
+--ultrafast`), or (b) an explicit **"ultrafast mode"** request in the user prompt (the
+orchestrator recognizes the intent and applies the same override; conservative — only
+an explicit "ultrafast" mention counts, never an inferred "make it fast"). It is
+**fully autonomous**: it SKIPS step 0.5 (clarifier) and step 1.6 (plan-gate) like an
+`--auto` run, then runs plan → K≤6 parallel `bad-research-fetcher` researchers →
+leader-only sectioned synthesis → slim grounding → slim critic → polish → gate.
+
+**On 0.5 (clarify):** the route — including `fast` — is only decided at step 1.5, *after* 0.5 has already run, so 0.5 normally runs first on every interactive run. 0.5 is skipped **only on `--auto`/wrapped runs** (a wrapped run is one where `research/wrapper_contract.json` is present and the query is binding GOSPEL not to be questioned). `16(+gate)` is shorthand for "step 16 plus the deterministic no-uncited-claim ship-gate that runs after it on every route" — a *ship-gate* is a blocking quality check that must pass before the report can be delivered.
+
+**On 1.6 (plan-gate):** runs AFTER the route is known (step 1.5), only on an
+**interactive + full-route-or-broad-survey** run — it emits the plan (sub-questions
++ per-sub-q source strategy + route + a rough scope summary) and pauses for
+approve/edit/proceed.
+It is **skipped (a no-op) on every non-interactive / `--auto` / wrapped / small bounded run** —
+exactly the runs that must flow straight through (the eval gate, the test suite, any
+`-p` pipeline). The deterministic trigger is `router.py::plan_gate_fires` (surfaced by
+`bad route --interactive --json` as `plan_gate.would_gate`). It is a **separate gate**:
+it NEVER changes the route, and on edit it patches only the `sub_questions` the
+downstream steps research — not the route/depth.
+
+Where the half-step numbers map to:
+- 0.5 → `Skill(skill: "bad-research-0.5-clarify")` (triage clarifier; runs first on every interactive run, skipped only on `--auto`/wrapped runs)
+- 1.5 → `Skill(skill: "bad-research-query-router")` (the route decision)
+- 1.6 → `Skill(skill: "bad-research-1.6-plan-gate")` (user-editable plan-gate; interactive + full-route-or-broad-survey only, skipped on non-interactive / `--auto` / wrapped / small bounded runs)
+- fast → `Skill(skill: "bad-research-fast")` (bounded-ReAct = a step-capped Reason+Act loop; replaces 2–14)
+- ultrafast → `Skill(skill: "bad-research-ultrafast")` (commercial-DR middle tier — plan → K parallel researchers → leader synthesis; replaces 2–14; explicit `--ultrafast`/"ultrafast mode" only, fully autonomous — skips 0.5 + 1.6)
+- 11.5 → `Skill(skill: "bad-research-11.5-citation-verifier")` (backward grounding = binding each report claim back to its source note; full only)
+- 12.5 → `Skill(skill: "bad-research-12.5-grader")` (in-pipeline grader loop: judge→patch→re-judge ≤3; full only — slots between critics/gap-fetch and the patcher's final convergence)
+- 14.5 → `Skill(skill: "bad-research-fresh-review")` (one fresh-context pass; full only)
+
+**RESPECT THE ROUTE.** `fast` is the cheap bounded ReAct loop, not a
+degraded full run; do NOT add the full-tier stages "to be thorough." `full` ALWAYS runs
+11.5 (citation verifier) and 14.5 (fresh-review). The deterministic
+no-uncited-claim gate in step 16 is a **ship-block for ALL routes**. If
+uncertain, route up — but never silently upgrade every query to `full`.
+
+### Reasoning-effort continuum + token ceiling
+
+The `--effort` flag is a 4-level dial — `minimal` /
+`low` / `medium` / `high` — that nudges the route + per-step fan-out on top of
+the auto-classified route. Use the human-readable mapping in the table directly
+below (source: `skills/routing_constants.py::EFFORT_MAP`, applied by
+`skills/router.py::effort_overrides`):
+
+`--interactive` is auto-detected from CLI context — it is NOT a manual dial; the
+plan-gate fires only on an interactive non-`--auto` run. `router.py::plan_gate_fires()`
+defaults `interactive=False` and returns `True` only when the CLI context is
+interactive (surfaced by `bad route --interactive --json` as `plan_gate.would_gate`).
+
+| `--effort` | route | drafters | fetcher fan-out | extended thinking |
+|---|---|---|---|---|
+| `minimal` | fast, single draft | Haiku-tier | ≤4 | off |
+| `low` | fast | Sonnet-tier | ≤8 | off |
+| `medium` (default) | full | default | 10–12, loci ≤4 | on |
+| `high` | full, max | Opus-tier | 12, loci ≤6 | on |
+
+When the user passes `--max-tokens <N>`, track the cumulative token total in
+`research/temp/orchestrator-notes.md`. As the run approaches the ceiling, degrade
+in **Claude's order — cut tokens LAST** (`skills/router.py::degrade_order`):
+
+1. cut tool-call redundancy first (skip the redundancy-audit sub-step)
+2. then cut fan-out width (fewer fetchers / fewer loci)
+3. then cut model tier (heavy → light on non-critical steps)
+4. **terminal — short-circuit to synthesis** (`short_circuit_to_synthesis`): after
+   **each retrieval/critic round**, call
+   `skills/router.py::should_short_circuit(cumulative_tokens, ceiling)`. When it
+   returns true — i.e. `ceiling − cumulative < RESERVE_FOR_SYNTHESIS`
+   (`skills/routing_constants.py::RESERVE_FOR_SYNTHESIS`) — **stop stepping**: skip
+   the remaining retrieval/critic stages and jump straight to step 10/11 (synthesis)
+   with whatever's been gathered. You ship a smaller-corpus *grounded* report rather
+   than dying mid-pipeline. This is Perplexity's "reserve budget for synthesis."
+5. NEVER cut the synthesis / grounding token budget itself — that's the 80%-variance
+   core. The short-circuit above *protects* that reserved budget; it never spends it
+   on more retrieval.
+
+The ceiling is opt-in; the default is the existing per-tier budget. We surface a
+count, not a billing system.
+
+---
+
+## Bootstrap (run BEFORE invoking step 1)
+
+Before you invoke any step skill, do this:
+
+0. **Auto-init if missing.** Two checks for the first-run-after-global-install case:
+   - **Vault check.** If `.hyperresearch/` doesn't exist in the working directory, run `bad init . --json`. Creates the SQLite vault (the `research/` source store — every fetched source becomes a note here) and the `research/` directory.
+   - **Step-skills check (lazy install).** If `.claude/skills/bad-research-1-decompose/SKILL.md` doesn't exist relative to the working directory, run `bad install --steps-only . --json`. The user-global install ships only the entry skill + agents + PreToolUse hook; the step skills materialize per-project on first `/bad-research` invocation via this command. It installs the step skill files needed by `Skill(skill: "bad-research-N-...")` calls in later steps.
+
+   If either command fails because the binary isn't on PATH, tell the user to run `pip install bad-research` first. If both files already exist, both commands no-op cheaply — safe to run unconditionally.
+
+0.5. **Archive any prior run's artifacts.** Run `hyperresearch archive-run --json`. If a previous `/hyperresearch` session left a scaffold, loci.json, comparisons.md, critic-findings, patch-log, polish-log, prompt-decomposition, or any `research/temp/*` scratch, this moves the whole set into `research/runs/archive-<prev-tag>-<UTC-timestamp>/` so the new run starts from a clean slate without losing the prior run's audit trail. Final reports (`research/notes/final_report_<tag>.md`) and canonical query files (`research/query-<tag>.md`) are already namespaced and stay in place. The command no-ops cheaply on a fresh vault — safe to run unconditionally. **Caveat:** this protects sequential runs only. Two `/hyperresearch` invocations that overlap in time still race on the new files they both write; if you need true parallel runs, namespace per-run artifacts under `research/runs/<vault_tag>/` instead.
+
+1. **Resolve the canonical research query.** Order of precedence:
+   - If `research/prompt.txt` exists (legacy harness / wrapped run), read it. Its contents are the canonical research query. GOSPEL.
+   - Otherwise, use the user's verbatim prompt as the canonical research query.
+   - Extract wrapper requirements separately: required save path, citation format, terminal-section shape, wrapper contract. These are binding but NOT part of the query.
+   - If `research/wrapper_contract.json` exists, read it.
+
+2. **Mint a unique vault tag.** First produce a short topical slug from the canonical query — 3–5 lowercase hyphen-separated words, e.g. `efield-dft-sac`. Then call `hyperresearch vault-tag <slug> --json` and parse the `vault_tag` field from the response. The CLI appends a random 6-hex-char suffix that's verified unique against every prior run's `research/query-*.md` and `research/notes/final_report_*.md` in this vault. The result — e.g. `efield-dft-sac-a3f9b7` — is the canonical vault_tag for the rest of the pipeline. The suffix guarantees no overwrite of a prior run's final report or query file, even if the user re-runs the exact same query or two different queries slug-collide.
+
+3. **Persist the query file.** Write the verbatim canonical query to `research/query-<vault_tag>.md`:
+   ```markdown
+   ---
+   vault_tag: <slug>
+   created: <ISO-8601 timestamp>
+   source: prompt.txt | user-prompt
+   ---
+
+   <verbatim query text, character-for-character>
+   ```
+   This file is the **canonical query reference for the entire pipeline**. Every step skill and every subagent reads it by path.
+
+4. **Classify modality** (collect / synthesize / compare / forecast) — record in the scaffold. This is a label that calibrates step 10's drafting style:
+   - **collect**: enumerative coverage, per-entity sections with named fields
+   - **synthesize**: defended thesis with evidence chains
+   - **compare**: proportionate per-entity depth + a committed recommendation
+   - **forecast**: predictive claims grounded in past + present, explicit time horizon
+
+5. **Write the scaffold.** Write `research/scaffold.md` (your private planning document — it MUST NOT appear anywhere in the final report). Include in scaffold:
+   - User Prompt (VERBATIM — gospel)
+   - Run config (vault_tag, query_file_path, modality, wrapper requirements)
+   - Modality classification rationale
+   - Tier rationale (filled in after step 1)
+   - Wrapper requirements (save path, citation format, terminal sections)
+
+6. **Seed the TodoWrite list (seed-then-lazy).** The route is only known after step 1.5, so seed in two passes. **First**, seed just the pre-route steps that always run, in order:
+   - `Step 0.5 — Skill: bad-research-0.5-clarify`
+   - `Step 1 — Skill: bad-research-1-decompose`
+   - `Step 1.5 — Skill: bad-research-query-router`
+
+   **Then**, after step 1.5 returns the `route`, seed the remaining todos from the matching row of the route table above (the `fast` / `full` step sequence). Do NOT seed the full-tier stage sequence up front and prune — you don't know the route yet, and a `fast` run never has most of them.
+
+   The todo list survives context compaction; it's your durable memory of where you are in the chain.
+
+7. **Invoke the clarifier (step 0.5)** UNLESS this is an `--auto` / wrapped run
+   (`research/wrapper_contract.json` present) **or an `ultrafast` run** (the
+   `--ultrafast` flag or an explicit "ultrafast mode" request) — then skip straight
+   to step 1:
+   `Skill(skill: "bad-research-0.5-clarify")`. The clarifier is triage-tier,
+   default-proceed, ≤3 questions; it writes `research/clarify.json`.
+
+8. **Invoke step 1 (decompose):** `Skill(skill: "bad-research-1-decompose")`.
+
+9. **Invoke step 1.5 (the query router):** `Skill(skill: "bad-research-query-router")`.
+   It runs `bad route --apply` over the decomposition and writes the `route`
+   field into `research/prompt-decomposition.json`.
+   For an `ultrafast` run, the orchestrator passes the override instead: `bad route
+   --apply --ultrafast` — forcing `route="ultrafast"` regardless of the
+   auto-classification (mutually exclusive with `--fast`/`--full`).
+
+10. **Invoke step 1.6 (the plan-gate)** for the `full` route:
+    `Skill(skill: "bad-research-1.6-plan-gate")`. It self-decides via
+    `bad route --interactive --json` (`plan_gate.would_gate`) whether to pause:
+    on an interactive + full-route-or-broad-survey run it emits the plan and waits
+    for approve/edit/proceed; on a non-interactive / `--auto` / wrapped / small
+    bounded run it is a no-op and returns immediately. **Skip it for `fast`** (a
+    small bounded run is never gated) **and for `ultrafast`** (autonomous by
+    design). This step never changes the route.
+
+After step 1.5 (and the 1.6 plan-gate where it applies) returns, read
+`research/prompt-decomposition.json` for the `route`. **Announce the chosen route and its
+rough ETA to the user in one line before you continue** — e.g. `Route: ultrafast (~5–15 min).`
+/ `Route: fast (a few min).` / `Route: full (~1.5–2.5 h).` — so a long job is never a
+surprise. (On a non-interactive / `-p` / wrapped run, write this line to
+`research/temp/orchestrator-notes.md` instead of emitting bare text — invariant 14 — and the
+1.6 plan-gate already surfaces the route on interactive `full` runs.) Then continue invoking
+step skills per the mode table above. For `fast`, invoke
+`Skill(skill: "bad-research-fast")` then run the slim citation-grounding pass and
+slim critic before step 15 polish + step 16 gate. After each step's exit criterion is met, mark its todo complete and move to
+the next.
+
+---
+
+## Subagent spawn contract (applies to every Task call)
+
+When a step skill instructs you to spawn a subagent, the prompt you pass MUST include **seven** pieces near the top — the 3-piece HAVE contract (research_query / pipeline_position / inputs) plus a 4-field delegation contract (objective / output_shape / tools_allowed / stop_conditions). A fetcher handed a thin sub-topic with no `stop_conditions` burns its whole budget "searching for nonexistent sources" — the exact documented failure mode. The four added fields are cheap insurance:
+
+1. **`research_query` — verbatim, block-quoted** from `research/query-<vault_tag>.md`. Do not paraphrase, do not summarize.
+
+2. **`pipeline_position`** — one sentence naming what step the subagent runs in, what came before, what comes after. Example: *"You are step 5 (depth investigator); step 4's loci analysts produced `research/loci.json`; step 6 reconciles your committed position."*
+
+3. **`inputs`** — the subagent's specific inputs (vault_tag, output_path, locus, etc.). Each step skill's spawn template documents the required fields.
+
+4. **`objective`** — the single self-contained sub-objective the subagent must achieve (one sentence).
+
+5. **`output_shape`** — the exact return format. For fetchers/investigators this is the `claims-*.json` shape: *"JSON array of {claim, note_id, quoted_support, char_start, char_end}"* — pinning this is what makes the downstream step 11.5 binding deterministic.
+
+6. **`tools_allowed`** — the explicit tool allowlist, e.g. `["web_search","fetch_url","execute_python"]` for a fetcher, `["Read","Write"]` for a synthesizer.
+
+7. **`stop_conditions`** — the runtime halt rule: *"halt when N primary sources found OR the tool-call cap is reached OR FETCHER_TIMEOUT_S elapses"*. The per-subagent caps live in `skills/routing_constants.py` (`FETCHER_TOOLCALL_CAP={"light":10,"ultrafast":15,"full":20}`, `FETCHER_TIMEOUT_S=300`, `INVESTIGATOR_TIMEOUT_S=900`, `SUBAGENT_SOURCE_KILL=100`). The host cannot hard-interrupt a subagent mid-loop, so the cap is a **prompt-level `stop_conditions` guard + an orchestrator-side per-wave deadline** (you check elapsed wall-clock between batch waves and proceed with returned results if a wave exceeds `FETCHER_TIMEOUT_S`).
+
+Skipping any of these seven in a Task prompt is a process violation.
+
+---
+
+## Recovery: if you wake up uncertain where you are
+
+Context compaction may eat parts of this conversation. If you're unsure what step you're on:
+
+(`$HPR` in the commands below is the `hyperresearch` CLI alias — the same binary the `bad` commands invoke; `-j` is shorthand for `--json`.)
+
+1. **Check the TodoWrite list.** It carries integer step numbers and survives compaction.
+2. **Check disk artifacts.** Each step writes a canonical artifact:
+   - Step 0.5: `research/clarify.json` (+ `## Brief` in scaffold)
+   - Step 1: `research/scaffold.md`, `research/prompt-decomposition.json`, `research/temp/coverage-matrix.md`
+   - Step 1.5: the `route` field inside `research/prompt-decomposition.json` (+ `## Route rationale` in scaffold)
+   - fast: `research/temp/react-trace.md` (+ `research/notes/final_report_<vault_tag>.md`)
+   - Step 2: vault notes tagged with vault_tag (`$HPR search "" --tag <vault_tag> -j`)
+   - Step 4: `research/temp/contradiction-graph.json` + `research/temp/consensus-claims.json` (Step 4.0 preamble), then `research/loci.json`
+   - Step 5: vault notes with `type: interim` (`$HPR search "" --tag <vault_tag> --type interim -j`)
+   - Step 6: `research/temp/tensions.md` (cross-locus + orphan tensions; Step 6.5 merges the former step-7 source-tensions into this single artifact)
+   - Step 8: `research/corpus-critic-gaps.json`, `research/temp/corpus-critic-results.md`
+   - Step 10: `research/temp/evidence-digest.md` (built inline in Step 10.0b Part 2, full only — formerly step 9), then `research/temp/draft-{a,b,c}.md` (full only; the `fast` route writes `research/notes/final_report_<vault_tag>.md` directly via the bad-research-fast writer)
+   - Step 11: `research/temp/synthesis-plan.md`, `research/temp/synthesis-outline.md`, `research/temp/synthesis-evidence.md`, `research/temp/synthesis-pass1.md`, `research/notes/final_report_<vault_tag>.md`
+   - Step 11.5: `research/temp/citation-verify-actions.json` (citation-verifier dispositions; full only)
+   - Step 12: `research/critic-findings-{dialectic,depth,width,instruction,assumption}.json`
+   - Step 13: `research/temp/post-critic-fetch-log.md`
+   - Step 12.5: `research/grader-log.json` (grader-loop convergence; full only) + `research/critic-findings-grader.json`
+   - Step 14: `research/patch-log.json` (and edited final_report.md)
+   - Step 14.5: `research/temp/fresh-review.json` (fresh-context reviewer findings; full only)
+   - Step 15: `research/polish-log.json` (and edited final_report.md)
+   - Step 16: `research/readability-recommendations.json`, `research/readability-decisions.json`, the `bad uncited-gate` pass + the `bad recitation-gate` pass (and edited final_report.md)
+3. **Find the highest-numbered step whose artifact exists.** Resume from the next step.
+4. **Re-invoke this entry skill** if you've lost track entirely: `Skill(skill: "bad-research")`. It loads fresh.
+
+If you're ever uncertain what to do next, the answer is: re-read this file and find the next step in the tier sequence.
+
+---
+
+## Final integrity gate (after step 16)
+
+Once step 16 returns, run the integrity check:
+
+```bash
+for f in research/critic-findings-dialectic.json \
+         research/critic-findings-depth.json \
+         research/critic-findings-width.json \
+         research/critic-findings-instruction.json \
+         research/critic-findings-assumption.json \
+         research/grader-log.json \
+         research/patch-log.json \
+         research/polish-log.json; do
+  test -f "$f" || echo "MISSING: $f"
+done
+```
+
+(The `fast` route skips the full 5-critic fan-out + patcher entirely — those critic-findings and patch-log files won't exist. That's expected; only `polish-log.json` is required for `fast`.)
+
+Then run lint:
+```bash
+$HPR lint --rule wrapper-report --json
+$HPR lint --rule locus-coverage --json
+$HPR lint --rule scaffold-prompt --json
+$HPR lint --rule patch-surgery --json
+```
+
+If any rule returns `error` severity issues, address them before declaring complete. Then ship: the final report lives at `research/notes/final_report_<vault_tag>.md`.
+
+---
+
+## Invariants you cannot break (the canonical rules — ALWAYS in force)
+
+1. **PATCH, NEVER REGENERATE after step 11.** Once step 11 produces the synthesized final report (or the bad-research-fast writer on the `fast` route), the only modifications are surgical Edit hunks from step 14 (patcher) and step 15 (polish-auditor). Both subagents are tool-locked to `[Read, Edit]`. If a critic's finding would require rewriting a whole section, it escalates to you as a structural issue — not a rewrite. Keep hunks surgical.
+2. **One final report.** Step 11's synthesizer writes the final report ONCE. No re-synthesizing. (`fast` route: the bad-research-fast writer writes it once.)
+3. **At least one dialectical locus.** Step 4 must surface ≥1 dialectical locus unless skip is justified.
+4. **Every interim note commits to a position.** Step 5 investigators end with `## Committed position`.
+5. **`research/temp/tensions.md` exists when loci count ≥ 1.** Step 6 is mandatory whenever step 4 produced any loci.
+6. **Steps are sequential at the outermost level, parallel within.** You cannot start step N+1 before step N completes. Within a step, parallelism is mandatory when there are multiple subagents.
+7. **Canonical research query is gospel everywhere.** Every subagent gets the verbatim query.
+8. **Hygiene rules apply to the final report only.** Workspace artifacts (scaffold, loci JSONs, interim notes, comparisons.md, patch log) can look however they need to look.
+9. **RESPECT THE TIER GATE — never skip or add a step.** For `full`, the entire full-tier stage sequence runs (the "Complete pipeline order (full tier)" block above, half-steps included); for `fast`, the prescribed bounded-loop sequence runs (loop → slim grounding → slim critic → polish → gate). Don't add steps "for thoroughness"; don't drop steps "for budget." The route is a binding contract.
+10. **Step 10 triple-draft ensemble is MANDATORY for `full` tier.** You MUST spawn 3 `bad-research-draft-orchestrator` subagents. Writing `research/notes/final_report_<vault_tag>.md` directly in step 10 (instead of going through the synthesizer in step 11) is a PIPELINE VIOLATION for these tiers.
+11. **Step 11 synthesis is MANDATORY for `full` tier.** The synthesizer subagent (Read+Write tool-locked) writes the final report from the 3 drafts. The orchestrator does NOT write the final report itself for these tiers.
+12. **Subagents read full source text.** Draft sub-orchestrators MUST batch-read every note in their `must_read_note_ids` list before writing. Fetchers MUST chase 3-8 primary sources via citation chains.
+13. **ARGUE, DON'T JUST REPORT** (full force for `argumentative` response_format; relaxed for `structured` and `short`). The pipeline pushes the final report toward argumentative density: loci must include ≥1 dialectical locus, depth investigators must commit to a position, step 6 forces cross-locus reconciliation, and step 11's synthesizer requires every body section that touches a tension to engage it explicitly.
+14. **NEVER EMIT BARE TEXT WHILE TASKS ARE RUNNING.** In non-interactive (`-p`) mode, a text-only response (no tool call) triggers `end_turn` — the process exits and the pipeline dies. Every response while subagent tasks are in flight MUST include a tool call; the best one is appending analytical thoughts to `research/temp/orchestrator-notes.md`. Vault count checks at most once per minute.
+
+---
+
+## Why the multi-skill chain
+
+One monolithic skill loaded once gets compacted away mid-run, and the orchestrator silently degrades (drops the corpus critic, replaces the triple-draft ensemble with a single draft, ships a flat report). The chain makes re-reading structural: each step skill loads fresh via the `Skill` tool at the moment it's needed, is self-contained, and reads its inputs from disk — so compaction can evict an old step's procedure without harm. The cost is one extra `Skill` invocation per step; the gain is structural — a long `full` run cannot silently collapse into its single-draft fallback when an early step's procedure gets compacted out of context mid-run.
+
+---
+
+## Now begin
+
+If you've read this far and the bootstrap (above) is done, invoke step 1:
+
+```
+Skill(skill: "bad-research-1-decompose")
+```
+
+If the bootstrap is NOT done, do the bootstrap first, then invoke step 1.

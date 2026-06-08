@@ -1,0 +1,24 @@
+{
+  "id": "03_multidomain_full",
+  "query": "What are the economic, environmental, and public-health tradeoffs of urban congestion pricing?",
+  "report": "# Tradeoffs of urban congestion pricing\n\nEconomically, congestion pricing raises municipal revenue and reduces deadweight loss from gridlock, though it is regressive without rebates [1]. Environmentally, charged cordons cut city-centre traffic volumes and lower local NO2 concentrations [2]. For public health, the reduced traffic is associated with fewer pedestrian injuries and lower respiratory-illness rates near the cordon [3].\n",
+  "corpus": [
+    {"note_id": "1", "url": "https://www.nber.org/congestion-welfare", "text": "Congestion pricing raises municipal revenue and reduces the deadweight loss of gridlock, but is regressive absent rebates."},
+    {"note_id": "2", "url": "https://www.nature.com/cordon-emissions", "text": "Charged cordons reduce city-centre traffic volumes and lower local NO2 concentrations."},
+    {"note_id": "3", "url": "https://www.thelancet.com/traffic-health", "text": "Reduced central traffic is associated with fewer pedestrian injuries and lower respiratory-illness rates near the cordon."}
+  ],
+  "expected_behavior": [
+    "covers all three named domains (economic, environmental, public-health)",
+    "routes to the full pipeline (multi-domain breadth)",
+    "cites a distinct source per domain"
+  ],
+  "axes_floor": {"completeness": "pass", "citation": "pass"},
+  "components": {
+    "decompose": {
+      "decomp": {"sub_questions": ["economic tradeoffs?", "environmental tradeoffs?", "public-health tradeoffs?"], "entities": ["congestion pricing"], "time_periods": [], "response_format": "structured", "contradiction_terms": [], "domains": ["economics", "environment", "public-health"]},
+      "expected_route": "full"
+    },
+    "retrieval": {"expect_note_ids": ["1", "2", "3"]},
+    "synthesis": {}
+  }
+}

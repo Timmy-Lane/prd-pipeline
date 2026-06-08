@@ -1,0 +1,22 @@
+{
+  "id": "07_breadth_list",
+  "query": "What are the main ACID properties of a database transaction?",
+  "report": "# Main ACID properties of a database transaction\n\nAtomicity guarantees a transaction is all-or-nothing [1]. Consistency guarantees a transaction moves the database from one valid state to another, preserving invariants [1]. Isolation guarantees concurrent transactions do not interfere with each other's intermediate state [2]. Durability guarantees that once committed, a transaction's effects survive crashes [2].\n",
+  "corpus": [
+    {"note_id": "1", "url": "https://en.wikipedia.org/wiki/ACID", "text": "Atomicity means a transaction is all-or-nothing; consistency means it moves the database from one valid state to another while preserving invariants."},
+    {"note_id": "2", "url": "https://www.postgresql.org/docs/acid", "text": "Isolation means concurrent transactions do not see each other's intermediate state; durability means committed effects survive crashes."}
+  ],
+  "expected_behavior": [
+    "enumerates all four ACID properties",
+    "defines each correctly and grounded in the corpus",
+    "cites each definition"
+  ],
+  "axes_floor": {"completeness": "pass", "citation": "pass"},
+  "components": {
+    "decompose": {
+      "decomp": {"sub_questions": ["What are ACID properties?"], "entities": ["ACID", "transaction"], "time_periods": [], "response_format": "structured", "contradiction_terms": [], "domains": ["software"]},
+      "expected_route": "fast"
+    },
+    "retrieval": {"expect_note_ids": ["1", "2"]}
+  }
+}

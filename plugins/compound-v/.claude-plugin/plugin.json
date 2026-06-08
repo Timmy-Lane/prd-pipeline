@@ -1,0 +1,22 @@
+{
+  "name": "compound-v",
+  "description": "Compound V — a lean, opinionated skill set for shipping great software with agentic AI: product & startup taste, real context engineering, security-first review, and a no-bullshit / no-overkill workflow. Superpowers, but better.",
+  "version": "0.2.0",
+  "author": {
+    "name": "Slava",
+    "email": "olor.guard@gmail.com"
+  },
+  "homepage": "https://github.com/LeventySeven/compound-v",
+  "repository": "https://github.com/LeventySeven/compound-v",
+  "license": "MIT",
+  "keywords": [
+    "skills",
+    "taste",
+    "context-engineering",
+    "code-review",
+    "security",
+    "agentic-coding",
+    "workflows",
+    "no-overkill"
+  ]
+}

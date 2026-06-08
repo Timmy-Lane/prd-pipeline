@@ -1,0 +1,23 @@
+{
+  "id": "01_causal_light",
+  "query": "Does regular aerobic exercise reduce resting heart rate?",
+  "report": "# Does regular aerobic exercise reduce resting heart rate?\n\nRegular aerobic exercise lowers resting heart rate by improving cardiac efficiency [1]. A cohort study reported a mean resting-rate reduction of about 8 beats per minute after twelve weeks of training [2].\n",
+  "corpus": [
+    {"note_id": "1", "url": "https://www.ncbi.nlm.nih.gov/pmc/aerobic-cardiac", "text": "Regular aerobic exercise lowers resting heart rate by improving cardiac stroke efficiency."},
+    {"note_id": "2", "url": "https://www.ahajournals.org/cohort-resting-rate", "text": "A cohort study reported a mean resting heart rate reduction of about 8 beats per minute after twelve weeks of aerobic training."}
+  ],
+  "expected_behavior": [
+    "states the causal direction (exercise -> lower resting heart rate)",
+    "every body sentence carries a citation",
+    "reports the ~8 bpm figure grounded in the corpus, not invented"
+  ],
+  "axes_floor": {"citation": "pass", "factual": "pass"},
+  "components": {
+    "decompose": {
+      "decomp": {"sub_questions": ["Does aerobic exercise reduce resting heart rate?"], "entities": ["aerobic exercise", "resting heart rate"], "time_periods": [], "response_format": "short", "contradiction_terms": [], "domains": ["health"]},
+      "expected_route": "fast"
+    },
+    "retrieval": {"expect_note_ids": ["1", "2"]},
+    "synthesis": {}
+  }
+}

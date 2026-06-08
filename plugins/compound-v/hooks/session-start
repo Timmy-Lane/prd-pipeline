@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# SessionStart hook for the Compound V plugin.
+# Injects the tiny `using-compound-v` router skill into every session so the
+# model knows the kit exists and how to route. All other skills load on demand
+# via the Skill tool (progressive disclosure — we dogfood context-engineering).
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+router_content=$(cat "${PLUGIN_ROOT}/skills/using-compound-v/SKILL.md" 2>&1 || echo "Error reading using-compound-v skill")
+
+# Single-pass bash escaping for JSON embedding.
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+router_escaped=$(escape_for_json "$router_content")
+session_context="<EXTREMELY_IMPORTANT>\nYou have Compound V — a lean skill set for shipping great software with agentic AI (taste, context engineering, security-first review, no bullshit, no overkill).\n\n**Below is the full content of your 'compound-v:using-compound-v' router skill. For all other Compound V skills, use the 'Skill' tool.**\n\n${router_escaped}\n</EXTREMELY_IMPORTANT>"
+
+# Emit only the field the current platform consumes (printf, not heredoc — bash 5.3+ heredoc hang).
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -z "${COPILOT_CLI:-}" ]; then
+  printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
+else
+  printf '{\n  "additionalContext": "%s"\n}\n' "$session_context"
+fi
+
+exit 0

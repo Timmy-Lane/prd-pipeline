@@ -1,0 +1,22 @@
+{
+  "id": "06_recency_temporal",
+  "query": "How did global average sea level change between 1993 and 2023?",
+  "report": "# How did global average sea level change between 1993 and 2023?\n\nSatellite altimetry shows global mean sea level rose by roughly 100 millimetres between 1993 and 2023 [1]. The rate of rise accelerated over that period, from about 2.1 millimetres per year in the 1990s to roughly 4.5 millimetres per year by the early 2020s [2].\n",
+  "corpus": [
+    {"note_id": "1", "url": "https://sealevel.nasa.gov/altimetry-record", "text": "Satellite altimetry shows global mean sea level rose by roughly 100 millimetres between 1993 and 2023."},
+    {"note_id": "2", "url": "https://www.cmar.csiro.au/sealevel-rate", "text": "The rate of global sea-level rise accelerated from about 2.1 millimetres per year in the 1990s to roughly 4.5 millimetres per year by the early 2020s."}
+  ],
+  "expected_behavior": [
+    "states the total change over the named window",
+    "reports the acceleration with grounded figures",
+    "respects the 1993-2023 time period"
+  ],
+  "axes_floor": {"factual": "pass", "citation": "pass"},
+  "components": {
+    "decompose": {
+      "decomp": {"sub_questions": ["sea level change 1993-2023?"], "entities": ["global mean sea level"], "time_periods": ["1993-2023"], "response_format": "short", "contradiction_terms": [], "domains": ["climate"]},
+      "expected_route": "full"
+    },
+    "retrieval": {"expect_note_ids": ["1", "2"]}
+  }
+}

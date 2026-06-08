@@ -1,0 +1,22 @@
+{
+  "id": "02_comparison",
+  "query": "How do PostgreSQL and MySQL differ in default isolation level?",
+  "report": "# How do PostgreSQL and MySQL differ in default isolation level?\n\nPostgreSQL defaults to the READ COMMITTED isolation level [1]. MySQL with the InnoDB engine defaults to REPEATABLE READ instead [2]. The practical difference is that MySQL's default prevents non-repeatable reads within a transaction, whereas PostgreSQL's does not [1].\n",
+  "corpus": [
+    {"note_id": "1", "url": "https://www.postgresql.org/docs/transaction-iso", "text": "PostgreSQL uses READ COMMITTED as the default transaction isolation level; non-repeatable reads are possible."},
+    {"note_id": "2", "url": "https://dev.mysql.com/doc/innodb-isolation", "text": "InnoDB uses REPEATABLE READ as its default isolation level, preventing non-repeatable reads within a transaction."}
+  ],
+  "expected_behavior": [
+    "names both defaults (PostgreSQL READ COMMITTED, MySQL REPEATABLE READ)",
+    "contrasts the practical effect",
+    "cites both sources"
+  ],
+  "axes_floor": {"citation": "pass", "completeness": "pass"},
+  "components": {
+    "decompose": {
+      "decomp": {"sub_questions": ["PostgreSQL default isolation?", "MySQL default isolation?"], "entities": ["PostgreSQL", "MySQL"], "time_periods": [], "response_format": "structured", "contradiction_terms": [], "domains": ["software"]},
+      "expected_route": "fast"
+    },
+    "retrieval": {"expect_note_ids": ["1", "2"]}
+  }
+}

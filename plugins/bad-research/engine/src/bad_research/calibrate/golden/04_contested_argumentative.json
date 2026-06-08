@@ -1,0 +1,22 @@
+{
+  "id": "04_contested_argumentative",
+  "query": "Is a four-day work week better for productivity than a five-day week?",
+  "report": "# Is a four-day work week better for productivity?\n\nProponents point to a large UK trial in which most participating firms reported maintained or improved output on a four-day schedule [1]. Critics counter that the trial selected self-motivated firms and that output measures were self-reported, limiting generalisability [2]. The evidence is therefore suggestive but not yet conclusive across sectors [1][2].\n",
+  "corpus": [
+    {"note_id": "1", "url": "https://www.4dayweek.com/uk-trial-results", "text": "In a large UK trial, most participating firms reported maintained or improved output on a four-day schedule."},
+    {"note_id": "2", "url": "https://www.economist.com/four-day-critique", "text": "Critics note the trial selected self-motivated firms and relied on self-reported output, limiting generalisability."}
+  ],
+  "expected_behavior": [
+    "presents both the supporting and the critical view (dialectic)",
+    "does not overclaim a settled answer",
+    "hedges the conclusion appropriately"
+  ],
+  "axes_floor": {"factual": "pass", "citation": "pass"},
+  "components": {
+    "decompose": {
+      "decomp": {"sub_questions": ["evidence for four-day week productivity?", "evidence against?"], "entities": ["four-day work week"], "time_periods": [], "response_format": "argumentative", "contradiction_terms": ["better", "worse"], "domains": ["labor"]},
+      "expected_route": "full"
+    },
+    "retrieval": {"expect_note_ids": ["1", "2"]}
+  }
+}

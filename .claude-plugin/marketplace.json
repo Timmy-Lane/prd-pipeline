@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "prd-pipeline",
+  "description": "The prd-pipeline build stack: a tier-adaptive PRD->plan->parallel-worktree-build pipeline, bundled with the Compound V skill set and the Bad Research deep-research engine. Install one plugin, get everything.",
+  "owner": {
+    "name": "Timmy-Lane",
+    "url": "https://github.com/Timmy-Lane/prd-pipeline"
+  },
+  "plugins": [
+    {
+      "name": "prd-pipeline",
+      "source": "./plugins/prd-pipeline",
+      "category": "workflow",
+      "description": "Tier-adaptive feature pipeline: spec/PRD -> adversarial grill -> confirmed plan-gate -> parallel worktree build -> verify -> ship. Depends on (and auto-installs) compound-v + bad-research from this same marketplace."
+    },
+    {
+      "name": "compound-v",
+      "source": "./plugins/compound-v",
+      "category": "workflow",
+      "description": "Lean skill set for shipping software with agentic AI: product & startup taste, context engineering, security-first review, TDD, no-overkill workflow. The superpowers replacement prd-pipeline composes."
+    },
+    {
+      "name": "bad-research",
+      "source": "./plugins/bad-research",
+      "category": "research",
+      "description": "Deep, multi-source, fully-cited research engine (tier-adaptive, adversarially reviewed). Vendored real engine: prompt skills + 16 agents load instantly; the Python `bad` CLI self-bootstraps on first use (needs Python 3.11-3.13 + uv/pipx)."
+    }
+  ]
+}

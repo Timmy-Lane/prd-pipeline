@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Self-bootstrapping launcher for the Bad Research engine.
+#
+# The bad-research plugin ships the Python engine source under ../engine but does
+# NOT pre-install it. The FIRST time any skill or agent calls `bad` / `hyperresearch`
+# (etc.), this wrapper builds a private venv in the plugin data dir and installs the
+# keyless engine into it, then transparently execs the real CLI. Subsequent calls are
+# a fast no-op straight to exec. If no usable Python is present, it exits non-zero with
+# a clear message so the caller (prd-pipeline / the research skill) can fall back to
+# Claude-native WebSearch/WebFetch instead of breaking.
+#
+# Honors the user's "install nothing manually" requirement: the only `/plugin install`
+# does everything; this bootstrap runs itself, lazily, on demand.
+set -euo pipefail
+
+# --- locate ourselves (CLAUDE_PLUGIN_* env vars are not guaranteed in a Bash-tool call) ---
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="$(cd "${SELF_DIR}/.." && pwd)"
+ENGINE_DIR="${PLUGIN_ROOT}/engine"
+
+# Persistent across plugin updates: prefer the harness-provided data dir, else a stable
+# home-cache path. Never install into the plugin cache itself (it is wiped on update).
+DATA_DIR="${CLAUDE_PLUGIN_DATA:-${HOME}/.cache/prd-pipeline/bad-research}"
+VENV_DIR="${DATA_DIR}/venv"
+BIN_NAME="$(basename "$0")"          # bad | badr | hyperresearch | hpr — all map to the same app
+TARGET="${VENV_DIR}/bin/${BIN_NAME}"
+
+bootstrap() {
+  mkdir -p "${DATA_DIR}"
+  # Cheap cross-process lock so parallel agents don't race on the first build.
+  local lock="${DATA_DIR}/.bootstrap.lock"
+  local waited=0
+  while ! mkdir "${lock}" 2>/dev/null; do
+    [ -x "${TARGET}" ] && return 0           # another process finished it
+    sleep 1; waited=$((waited+1))
+    [ "${waited}" -gt 600 ] && { echo "bad-research: bootstrap timed out waiting on lock" >&2; return 1; }
+  done
+  # shellcheck disable=SC2064
+  trap "rmdir '${lock}' 2>/dev/null || true" RETURN
+
+  [ -x "${TARGET}" ] && return 0             # built while we waited for the lock
+
+  # The engine requires Python >=3.11,<3.14. uv can fetch a compatible interpreter even when
+  # the system default is outside that range; the plain-venv fallback can only use what's here.
+  local pyreq="3.13"
+  echo "bad-research: first-run setup — building the deep-research engine (one time)..." >&2
+  if command -v uv >/dev/null 2>&1; then
+    uv venv --python "${pyreq}" "${VENV_DIR}" >&2
+    uv pip install --python "${VENV_DIR}/bin/python" "${ENGINE_DIR}" >&2
+  elif command -v python3 >/dev/null 2>&1 \
+       && python3 -c 'import sys; raise SystemExit(0 if (3,11) <= sys.version_info[:2] < (3,14) else 1)'; then
+    python3 -m venv "${VENV_DIR}" >&2
+    "${VENV_DIR}/bin/python" -m pip install --quiet --upgrade pip >&2
+    "${VENV_DIR}/bin/python" -m pip install --quiet "${ENGINE_DIR}" >&2
+  else
+    echo "bad-research: no usable Python 3.11-3.13 (and no 'uv') on PATH — the deep-research engine is unavailable." >&2
+    echo "             Install 'uv' (recommended) or a Python 3.11-3.13, or proceed with native web search." >&2
+    return 127
+  fi
+}
+
+if [ ! -x "${TARGET}" ]; then
+  bootstrap || exit $?
+fi
+
+exec "${TARGET}" "$@"

@@ -1,0 +1,13 @@
+.DS_Store
+node_modules/
+*.log
+.env
+.env.*
+/tmp/
+*.tmp
+
+# Internal research scaffolding & corpora — NEVER publish or vendor into this repo.
+# These are discovery inputs only; shipped skills cite public primary sources.
+research/
+BAD_GUIDE.md
+researchfms/

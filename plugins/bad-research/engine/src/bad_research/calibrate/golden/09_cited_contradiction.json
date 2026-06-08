@@ -1,0 +1,25 @@
+{
+  "id": "09_cited_contradiction",
+  "query": "Does regular sleep deprivation raise cardiovascular risk?",
+  "report": "# Does regular sleep deprivation raise cardiovascular risk?\n\nContrary to popular concern, regular sleep deprivation has no demonstrated effect on cardiovascular risk according to the leading cohort studies [1]. The Whitehall II study found no significant association between sleep duration and major cardiac events [2].\n",
+  "corpus": [
+    {
+      "note_id": "1",
+      "url": "https://www.ncbi.nlm.nih.gov/pmc/articles/sleep-cv-risk",
+      "text": "A meta-analysis of 15 cohort studies found that short sleep duration (< 6 hours) is associated with a 20% increased risk of cardiovascular disease compared to 7-8 hours of sleep."
+    },
+    {
+      "note_id": "2",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/whitehall-sleep",
+      "text": "The Whitehall II prospective cohort study found that short sleep duration was significantly associated with increased risk of coronary heart disease and stroke over a 25-year follow-up."
+    }
+  ],
+  "expected_behavior": [
+    "must NOT invert the causal direction - both corpus sources establish elevated risk, not absence of risk",
+    "the report's factual claim directly contradicts its cited sources",
+    "LLMJudge must fail the factual axis"
+  ],
+  "axes_floor": {"factual": "pass", "citation": "pass"},
+  "requires_llm": true,
+  "components": {}
+}

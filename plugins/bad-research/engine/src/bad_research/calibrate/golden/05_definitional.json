@@ -1,0 +1,21 @@
+{
+  "id": "05_definitional",
+  "query": "What is retrieval-augmented generation (RAG)?",
+  "report": "# What is retrieval-augmented generation (RAG)?\n\nRetrieval-augmented generation is an architecture that retrieves relevant documents from an external corpus at query time and conditions a language model's generation on them [1]. It reduces hallucination by grounding answers in retrieved evidence rather than relying solely on the model's parameters [1].\n",
+  "corpus": [
+    {"note_id": "1", "url": "https://arxiv.org/abs/2005.11401", "text": "Retrieval-augmented generation retrieves relevant documents from an external corpus at query time and conditions generation on them, grounding answers in retrieved evidence to reduce hallucination."}
+  ],
+  "expected_behavior": [
+    "gives a correct one-paragraph definition",
+    "names the grounding/anti-hallucination benefit",
+    "cites the source"
+  ],
+  "axes_floor": {"citation": "pass", "factual": "pass"},
+  "components": {
+    "decompose": {
+      "decomp": {"sub_questions": ["What is RAG?"], "entities": ["retrieval-augmented generation"], "time_periods": [], "response_format": "short", "contradiction_terms": [], "domains": ["ai"]},
+      "expected_route": "fast"
+    },
+    "retrieval": {"expect_note_ids": ["1"]}
+  }
+}

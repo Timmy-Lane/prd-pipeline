@@ -1,0 +1,307 @@
+---
+name: prd-pipeline
+description: >
+  Use when building, adding, implementing, or substantially changing a feature or
+  behavior — the end-to-end path from idea to shipped code. Tier-adaptive: a trivial
+  change skips straight to TDD + review; a small feature gets a one-pager spec, a
+  single grill pass, and a confirmed plan; a large or irreversible change gets a full
+  PRD, an adversarial grill, an architecture lock-in, an editable plan-gate, and a
+  parallel worktree build. Enforces: no non-trivial code without a confirmed spec +
+  plan, parallel agents in isolated git worktrees (you never switch branches), and
+  verification before "done". Composes the bundled compound-v workflow skills, the
+  bad-research deep-research engine, the project's grill/eng-review, parallel-agent
+  dispatch, TDD, and verification.
+---
+
+# prd-pipeline — idea → spec → confirmed plan → parallel build → verified ship
+
+You are the **orchestrator**. You sequence the phases below; the heavy lifting is done by
+composed skills and subagents. You do NOT write production code yourself during a Tier-2
+run — you route disjoint tasks to worktree-isolated agents and merge their work back.
+
+This skill encodes one rule above all: **for anything non-trivial, a human confirms the
+plan before code touches disk.** Everything else serves that.
+
+> Reference (the *why*, with sources): `references/research-notes.md`. Default spec
+> template: `references/spec-template.md`. Read those only if you need the rationale or
+> a template — this file is the operational procedure.
+
+---
+
+## Step 0 — Load project context + seed todos (always)
+
+**Preflight — verify dependencies first.** This skill composes others; confirm they're available before running (scan your available-skills list + tools). **`git` is a hard requirement** (the worktree build needs it) — if absent, STOP and tell the user. The **compound-v** skills (`brainstorming`, `writing-plans`, `batched-implementation`, `dispatching-parallel-agents`, `test-driven-development`, `verification-before-completion`, `finishing`, plus `critical-thinking` · `agent-security` · `recheck` · `startup-taste`) and the **bad-research** deep-research engine ship as bundled plugin dependencies — installing prd-pipeline pulls them in automatically, so they should already be present. If a composed skill is somehow missing, note it once and use the inline fallback from the Composition map; the research engine degrades to Claude-native WebSearch/WebFetch if the bad-research Python engine hasn't bootstrapped. The native `Agent(isolation:"worktree")` is always present in Claude Code. Surface gaps up front; never fail silently mid-run. (`prd doctor` runs the same check from the shell.)
+
+1. **Read the project's `CLAUDE.md`** (repo root). Extract, with fallbacks:
+   - **Spec directory + template** — where specs/PRDs live (e.g. `docs/prd/`, `docs/rfd/`,
+     `docs/specs/`) and the template path. *Fallback:* `docs/specs/NNNN-kebab-title.md` +
+     this skill's `references/spec-template.md`.
+   - **"Spec-required" triggers** — the project's list of what mandates a spec.
+     *Fallback:* the universal list in Step 1.
+   - **Project-specific skills** — a project grill skill (e.g. `grill-prd`) and an
+     architecture-review skill (e.g. `eng-review`). *Fallback:* the built-in grill (Step 3)
+     and `Agent(subagent_type: Plan)` (Step 4).
+   - **Project invariants** — display conventions, config-vs-env rules, category lists,
+     read-only DBs, etc. Carry these into the spec and the grill lenses.
+   - **Research engine** — the project may pin one. *Default:* the bundled `Skill(bad-research:bad-research)`
+     for cited synthesis; for grill critics use `Agent(subagent_type: general-purpose)` with the
+     `compound-v:critical-thinking` lens. *Fallback (engine not bootstrapped):* Claude-native
+     WebSearch/WebFetch.
+2. **Classify the tier** (Step 1) from the user's request.
+3. **Seed `TodoWrite`** (or your harness's task tool — e.g. `TaskCreate`/`TaskUpdate`) with the
+   phases for the chosen tier, in order. The list is your durable memory — it survives context
+   compaction. Re-read this file and the spec file if you wake up unsure where you are.
+
+> **Lifecycle-field check.** Recovery and Step 6 read the spec's `status:` to know the phase.
+> If the adopted template carries status as prose (`**Status:** Draft`) instead of a
+> machine-readable `status:` frontmatter field, the **`TodoWrite`/task list is the authoritative
+> phase marker** — don't grep the doc to recover. When you create a spec from a fresh template,
+> prefer one with a parseable `status:` line so the lifecycle machinery (`draft→accepted→implemented`)
+> actually works.
+
+> **Run `/prd-pipeline` from *within* the target repo.** The worktree build (Step 5) uses the
+> *session's* git repo. Driving it against a different repo means managing worktrees by hand —
+> avoid it; `cd` into the repo you're building in first.
+
+---
+
+## Step 1 — Tier routing (decide once, up front)
+
+Borrowed from Google's "warranted when 3+ ambiguity answers are yes" + Bezos one-way/two-way
+doors + bad-research's route table. **Respect the tier — don't add ceremony to a fix; don't
+skip the gate on a one-way door.**
+
+| Tier | Trigger | Pipeline |
+|---|---|---|
+| **T0 — no spec** | Bug fix · refactor with no behavior change · docs · dep bump · prompt/threshold tweak measured against an existing eval · devops/CI **config**. Two-way door, solution obvious. *(A test harness or any script guarding a `curl\|bash`/release/migration path is NOT trivial devops — it earns a T1 spec.)* | Skip to **Step 5** (implement) → **Step 6** (verify) → review. No spec, no gate. Exit fast. |
+| **T1 — light spec** | Small feature · single subsystem · mostly reversible · < ~8 files, ≤2 new components. | Step 2 (one-pager spec) → Step 3 (single grill pass) → Step 4 (plan, lightweight) → **plan-gate** → Step 5 → Step 6 → ship. |
+| **T2 — full spec** | New pipeline/behavior · new DB table or column · new public API/endpoint · new external data source · cross-cutting change · **one-way door** · anything that moves user-visible outcomes. | Step 2 (full PRD) → Step 3 (adversarial grill) → Step 4 (architecture lock-in) → **editable plan-gate** → Step 5 (parallel worktree build) → Step 6 → ship. |
+
+If unsure between two tiers, **route up** — but never silently upgrade every change to T2.
+State the tier and one-line reason before proceeding.
+
+**Research-grounding axis (orthogonal to the tier).** Ask one more question: *does this spec rest
+on external/empirical claims* — benchmarks, vendor capabilities, "approach X beats Y", performance
+or accuracy numbers? If yes, a cited research pass is **required before Step 2** (`Skill(bad-research:bad-research)`,
+else native WebSearch/WebFetch), and Step 2.5 pass 9 binds every claim to that corpus. A T2 built on unsourced
+assertions is the most common way a good-looking PRD turns out hollow — the structure is identical
+whether the numbers are sourced or invented, so only the binding gate tells them apart.
+
+---
+
+## Step 2 — Spec (T1/T2)
+
+Run `Skill(compound-v:brainstorming)` first if intent/requirements are not already crisp
+(creating features ⇒ brainstorm before writing). For a should-we-build-this gut-check or a
+UI/UX-bearing spec, `Skill(compound-v:startup-taste)` / `Skill(compound-v:product-taste)` first.
+Then write the spec to the project's spec directory at `status: draft`, using the project
+template (fallback: `references/spec-template.md`).
+The spec is **committed on the feature branch in Step 5** alongside the implementation, so intent
++ code reach `main` together at ship — don't commit it to `main` up front.
+
+Synthesized section skeleton (bold = required; rest = when relevant). **The template's
+`(required)` markers are the authoritative required set — Pass 7 gates on them; the bold here
+just mirrors them, keep the two in sync):** **Problem/Context**, **Goals & Non-Goals**,
+customer-framing (working-backwards, 1 paragraph), **Proposed solution + trade-offs**, **metric
+delta / success criteria**, **alternatives considered** (required for T2),
+cross-cutting concerns (security/privacy/observability/cost/data), **Drawbacks / risks /
+hypothesis-invalidators** (observable conditions that mean *roll back*), **Wedge** (narrowest
+valuable slice), open questions. **Prose, not bullets** (writing forces precision). **Fits ~2
+pages or it's too broad — split it.** A spec with no "alternatives considered" wasn't designed.
+
+For T1 the spec is a one-pager (Problem · Goals/Non-Goals · Wedge · Success criteria · Risks).
+
+---
+
+## Step 2.5 — Cross-artifact consistency gate (T2; optional for T1)
+
+Before the grill, run a mechanical consistency check so critics spend their cycles on novel
+problems — not ones a deterministic pass would catch in seconds. Spawn ONE read-only agent
+(tools `[Read, Write]` — Write only for its report) over the spec + `docs/adr/*` + the project's
+CLAUDE.md invariants. Nine passes (1–6 generic consistency; 7–9 enforce this skill's signature disciplines deterministically, so a critic never has to *rediscover* a structural omission):
+1. **Ambiguity** — vague terms ("fast", "scalable") with no measurable criterion; unresolved `[NEEDS CLARIFICATION]` markers.
+2. **Underspecification** — requirements with no success criterion; references to undefined components.
+3. **Constitution alignment** — conflicts with project invariants (display conventions, config-vs-env, read-only DBs, etc.).
+4. **Coverage gaps** — spec requirements with no corresponding plan task (defer this pass until after Step 4 if the plan doesn't exist yet).
+5. **Inconsistency** — terminology drift vs ADRs; approaches conflicting with shipped specs.
+6. **Duplication** — near-duplicate requirements.
+7. **Template-section coverage** — every section the active template marks **`(required)`** is present AND non-empty (the default template tags them inline; a project template's own required set wins). A missing or stub required section (e.g. **Wedge**, **Alternatives considered** (T2), **Drawbacks/invalidators**) is **CRITICAL**. Don't leave this to interpretation under another pass — check the literal section set.
+8. **Invalidator presence** — the spec contains ≥1 hypothesis-invalidator stated as a triple: *observable condition → how it's measured → that it means roll back*. An aspirational target ("we aim for −25%") is NOT an invalidator. Zero such triples = **CRITICAL**. (Lens 2 of the grill critiques invalidator *quality*; this pass enforces their *existence*.)
+9. **Claim↔source binding** — every load-bearing quantitative/empirical claim (a number, "improves X by N%", "research shows", "industry-standard", a vendor capability) either cites a source (research note / benchmark / ADR), is the spec's own post-ship success criterion, or is tagged `[ASSUMPTION]`/`[NEEDS CLARIFICATION]`. An unsourced load-bearing number is **CRITICAL** — it's the line between a grounded spec and a plausible-sounding hollow one. (Reuses the Step 6.2b citation-verifier pattern at spec-time.)
+
+Output: `<spec-dir>/<spec>-analysis.md` — a findings table (severity · location · summary · fix).
+**CRITICAL findings block Step 3** (fix the spec inline first); HIGH/MED findings are passed as
+`context` into the Step 3 critics so they amplify rather than re-discover. (Pattern: spec-kit `/analyze`.)
+
+---
+
+## Step 3 — Grill (adversarial review of the spec)
+
+Find problems; do NOT propose fixes (that's Step 4). Use the project grill skill if present
+(e.g. `Skill(grill-prd)`); otherwise run the built-in grill:
+
+- **T1:** ONE critic pass (`Agent(subagent_type: general-purpose)` applying the
+  `compound-v:critical-thinking` lens) over the spec, covering edge cases +
+  invalidator-measurability + one pre-mortem question.
+- **T2:** **3–4 critics IN PARALLEL** (one message, multiple `Agent` calls), each a distinct
+  lens (each applies `compound-v:critical-thinking` — steelman + disconfirm) — redundant
+  critics hide failure modes, diverse lenses surface them:
+  1. **Architecture/conflict** — contradicts an existing decision (ADR)? duplicates shipped
+     scope? inconsistent with how the system works today? violates a project invariant?
+  2. **Edge-case/invalidator** — is there ≥1 invalidator *at all*, and is it measurable?
+     success criteria with no measurement plan? null/empty/race/restart/partial-failure/rate-limit/cap-exhaustion?
+  3. **Cost/ops/telemetry** — cost math shown? operator knobs in the right place (config vs
+     env)? telemetry to query it later? backwards-compat for existing data?
+  4. **Pre-mortem** — "it's a year later and this shipped and failed: list the causes." (+30%
+     risk identification; Klein/HBR.)
+
+Each critic gets the **7-field subagent contract** (see Step 5). Aggregate findings into 3
+buckets: **(1) must-fix before `accepted`**, (2) open-question (record in the spec), (3)
+acknowledge-and-accept (record in anti-goals/out-of-scope). **Exit criterion: bucket 1 is
+empty.** Until then the spec stays `draft`.
+
+For deep external/literature questions a critic surfaces, escalate to `Skill(bad-research:bad-research)`
+(falls back to native WebSearch/WebFetch if the engine hasn't bootstrapped).
+
+---
+
+## Step 4 — Plan / architecture lock-in (T1/T2)
+
+Produce the implementation plan. For T2 use the project architecture-review skill if present
+(e.g. `Skill(eng-review)`), else `Agent(subagent_type: Plan)` with this requirement:
+
+> "Lock the architecture for `<spec>`: data flow, file boundaries, edge cases, test coverage.
+> Output an **ordered task list where each task touches DISJOINT files** so parallel agents
+> don't collide. Cross-cutting edits (shared types, config, schema, build files, CLAUDE.md,
+> docs) **serialize after** the parallel block."
+
+The plan MUST have: disjoint-file task partition · ordered phases with named dependencies ·
+test plan (the commands the reviewer runs) · rollback/reversibility · risks + blast radius.
+Right-size the diff — smallest change that cleanly expresses the intent, but don't compress a
+necessary rewrite into a patch.
+
+### Plan grader loop (Step 4.5 — T2)
+Before the human sees the plan, converge its quality. Spawn a grader agent **tool-locked to
+`[Read, Edit]`** over the plan file. Score each criterion 1–5: (1) disjoint-file coverage,
+(2) measurable invalidators + rollback per task, (3) test plan present, (4) complexity fit for
+the tier. For any criterion < 4, apply **surgical Edit hunks** to that section — **PATCH, NEVER
+REGENERATE** the plan. Re-score; loop ≤3 rounds or until all ≥ 4. Append a short `## Grader notes`
+(final scores + any criterion still < 4) so the gate sees it. (Pattern: bad-research grader.) T1
+skips this — a one-pager doesn't need it.
+
+### The plan-gate (the one human gate that matters) — MANDATORY for T2, recommended for T1
+**Emit the plan** (sub-tasks + per-task file scope + risks; **no time estimates**) and **PAUSE for
+approve / edit / proceed.** No code touches disk before approval.
+- **Gate HARD** on one-way-door / cross-cutting / schema / public-API / outcome-moving changes.
+- Let two-way-door, reversible, single-file changes flow with a one-line heads-up.
+- On `accepted`, set the spec `status: accepted` and record the decision (one line) in the
+  spec. **Disagree-and-commit: once confirmed, stop re-arguing scope.**
+
+---
+
+## Step 5 — Implement (parallel, worktree-isolated)
+
+**The mandate: you stay on `main`; the work auto-branches into isolated git worktrees; you
+(and the user) NEVER switch branches and `main` is never left half-built.** Git worktrees solve
+the file-conflict problem completely — they are the enabling technique for parallel AI development.
+
+**Always start from `main`.** For a T1/T2 feature, FIRST auto-create an independent feature
+branch in its own worktree and do all the work there — `main` stays clean and usable the whole
+time. The user never `git checkout`s, never manually branches, never gets pulled off `main`.
+
+- **≥2 disjoint-file tasks ⇒ parallelize.** Spawn one `Agent` per task **with
+  `isolation: "worktree"`** (Claude Code spins a fresh worktree + dedicated branch under
+  `.claude/worktrees/`, attaches that agent's plan/memory/hooks/transcript to the worktree —
+  not the user's repo — and auto-cleans if unchanged). Run independent agents concurrently
+  (multiple `Agent` calls in ONE message); or use `Skill(compound-v:dispatching-parallel-agents)`
+  + `Skill(compound-v:batched-implementation)`.
+- **Merge inward; touch `main` only at ship.** Sub-task branches `git merge` into the **feature
+  branch** as they finish (disjoint-file partition from Step 4 makes this conflict-free). The
+  feature branch lands on `main` ONLY at the deliberate ship step (Step 6) — never continuously,
+  so `main` is never half-built. The orchestrator never `git checkout`s the user's tree.
+- **Each task does TDD** (`Skill(compound-v:test-driven-development)`): test first (RED) →
+  minimal impl (GREEN) → refactor.
+- **Cleanup is part of the task.** After merging a worktree branch, `git worktree remove` it
+  and delete the merged branch — leftover locked worktrees pile up otherwise.
+- **Concurrency ceiling: 4–8 worktrees.** Above that you're bottlenecked on review, not on
+  Claude. Cross-cutting edits run serially AFTER the parallel block, on the user's branch.
+
+**7-field subagent contract** — every spawned `Agent` prompt MUST include, near the top:
+`objective` (one self-contained sentence) · `inputs` (spec path, task's exact file scope,
+branch) · `output_shape` (what to return) · `tools_allowed` · `stop_conditions` · `context`
+(relevant project invariants) · `verification` (the test/command that proves the task done — and
+the agent must **commit its work on its worktree branch before returning**, else there is nothing
+to merge back).
+
+T0: a single trivial change can go directly on `main` (TDD + review), no worktree fan-out — or
+its own throwaway branch if you want PR hygiene. Anything bigger gets the feature-branch worktree above.
+
+---
+
+## Step 6 — Verify, review, ship
+
+1. **Verify before claiming done** — `Skill(compound-v:verification-before-completion)`.
+   Run the test plan's commands, confirm output. Evidence before assertions. For pipeline /
+   agent / behavior changes, run the project's real-run check (the project CLAUDE.md names it).
+2. **Auto code review** — `code-reviewer` (every diff) · `typescript-reviewer` (TS) ·
+   `security-reviewer` (auth/keys/payments/external input) · `database-reviewer` (schema/SQL).
+   For a finished batch, add one read-only `Skill(compound-v:recheck)` pass (misalignment ·
+   bugs · over-engineering); for anything that fetches pages, reads documents, or runs
+   model-written code, add `Skill(compound-v:agent-security)` (lethal trifecta · untrusted input).
+2b. **Backward traceability gate (T2)** — before marking `implemented`, spawn a read-only agent
+   (`[Read]`) over the confirmed plan + spec + `git diff <feature-branch>..main`. Check: every plan
+   task has a diff change OR an explicit "skipped" note; every spec requirement maps to ≥1 task;
+   no orphan files in the diff with no covering task. CRITICAL gaps (orphan files = scope creep;
+   uncovered requirements = silent omission) block step 4 until resolved. Append the pass/fail
+   summary to the spec. (Pattern: bad-research citation-verifier — bind every change to the plan.)
+3. **Re-anchor to the spec** — does what shipped match the confirmed plan? Flag any drift.
+4. **Mark `status: implemented`** in the spec; it stays as the record of what was decided and why.
+5. **Ship** — `Skill(compound-v:finishing)` → integrate the feature branch
+   into `main` (merge or PR) per the project's git convention (PRs only when asked), then prune
+   its worktree. This is the ONLY moment `main` changes.
+
+---
+
+## Invariants (cannot break)
+
+1. **No non-trivial code without a confirmed plan.** The plan-gate is mandatory for T2 and
+   the default for T1. Skipping it is the single most damaging failure mode.
+2. **Specs are append-only.** `draft → accepted → implemented`; killed → `abandoned`; changed
+   → `superseded` (link forward). Never delete a spec.
+3. **Parallel tasks touch disjoint files.** Two agents editing the same file = collision.
+   Cross-cutting edits serialize after the parallel block.
+4. **Agents work in worktrees; the user's tree never switches branches.** Merge back with
+   `git merge`, then clean up the worktree + branch.
+5. **Grill finds problems; eng-review/plan proposes fixes.** Don't blur the phases.
+6. **Respect the tier.** Don't gold-plate a T0 fix; don't skip the grill or gate on a T2
+   one-way door. Route up when unsure, not reflexively to T2.
+7. **Defer to the project.** Project CLAUDE.md (spec dir, template, triggers, invariants,
+   project skills) overrides this skill's fallbacks where they conflict.
+
+---
+
+## Recovery (if context compacted mid-run)
+
+1. Check the `TodoWrite` list — it carries the phase you're on.
+2. Check disk: the spec file's `status:` (draft = pre-gate; accepted = plan confirmed,
+   implementing; implemented = done) and any merged worktree branches.
+3. Resume from the next incomplete phase. Re-invoke `Skill(prd-pipeline)` to reload this file.
+
+## Composition map
+
+| Phase | Composes |
+|---|---|
+| Should-we-build / taste | `compound-v:startup-taste` · `compound-v:product-taste` (when scoping or UI/UX-bearing) |
+| Spec intent | `compound-v:brainstorming` |
+| Deep research | `bad-research` (bundled engine) ‖ native WebSearch/WebFetch fallback (project may pin another) |
+| Consistency gate (2.5) | read-only `Agent` — 9-pass spec × ADR × CLAUDE.md check (spec-kit `/analyze`); passes 7–9 = template-coverage · invalidator-presence · claim↔source binding |
+| Grill | project grill skill (e.g. `grill-prd`) ‖ built-in parallel critics, each applying `compound-v:critical-thinking` |
+| Architecture | project eng-review skill ‖ `Agent(subagent_type: Plan)` |
+| Plan grader (4.5) | grader `Agent` `[Read, Edit]` — judge→patch→re-judge ≤3, patch-never-regenerate (bad-research grader) |
+| Plan persistence | `compound-v:writing-plans` |
+| Parallel build | `compound-v:dispatching-parallel-agents` + `compound-v:batched-implementation` + `Agent(isolation:"worktree")` |
+| Per-task TDD | `compound-v:test-driven-development` |
+| Verify | `compound-v:verification-before-completion` |
+| Traceability gate (6.2b) | read-only `Agent` — plan ↔ diff ↔ spec, blocks `implemented` on drift (bad-research citation-verifier) |
+| Review | `code-reviewer` · `typescript-reviewer` · `security-reviewer` · `database-reviewer` · `compound-v:recheck` · `compound-v:agent-security` |
+| Ship | `compound-v:finishing` |

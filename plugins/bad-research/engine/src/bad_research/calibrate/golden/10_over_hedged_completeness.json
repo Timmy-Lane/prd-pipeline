@@ -1,0 +1,26 @@
+{
+  "id": "10_over_hedged_completeness",
+  "query": "What are the primary causes of the 2008 financial crisis?",
+  "report": "# What are the primary causes of the 2008 financial crisis?\n\nThe 2008 financial crisis was a complex event [1]. Scholars have proposed various contributing factors, though the relative importance of each remains debated [2]. Some analysts point to mortgage markets, while others emphasize regulatory frameworks, and still others focus on systemic factors [1][2]. Ultimately, the causes are multifaceted and context-dependent, and any definitive account would require significantly more research than can be summarized here [1].\n",
+  "corpus": [
+    {
+      "note_id": "1",
+      "url": "https://www.federalreserve.gov/pubs/feds/2012/crisis-causes",
+      "text": "The primary causes of the 2008 financial crisis include: (1) the collapse of the US subprime mortgage market and associated mortgage-backed securities, (2) excessive leverage at major financial institutions, (3) inadequate regulatory oversight of shadow banking, and (4) systemic contagion through interconnected derivatives exposure."
+    },
+    {
+      "note_id": "2",
+      "url": "https://www.brookings.edu/financial-crisis-retrospective",
+      "text": "Economists broadly agree on four root causes: subprime lending expansion, securitization opacity, regulatory gaps in the shadow banking system, and the pro-cyclical nature of capital requirements under Basel II."
+    }
+  ],
+  "expected_behavior": [
+    "must name the specific causes from the corpus - subprime lending, leverage, regulatory failure, securitization",
+    "the corpus contains a clear enumerated list of causes; the report's evasive hedging fails completeness",
+    "LLMJudge must fail the completeness axis - the answer is technically present in citations but buried under evasion",
+    "RubricJudge passes (content-word overlap is sufficient, hedging language not in _OVERCLAIM list)"
+  ],
+  "axes_floor": {"completeness": "pass"},
+  "requires_llm": true,
+  "components": {}
+}

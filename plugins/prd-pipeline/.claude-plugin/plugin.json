@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "prd-pipeline",
+  "displayName": "PRD Pipeline",
+  "version": "0.5.0",
+  "description": "Tier-adaptive feature-development pipeline for Claude Code: idea -> spec/PRD -> adversarial grill -> confirmed plan-gate -> parallel worktree build -> verify -> ship. No non-trivial code without a confirmed plan; parallel agents in isolated git worktrees; verification before done.",
+  "author": {
+    "name": "Timmy-Lane",
+    "url": "https://github.com/Timmy-Lane/prd-pipeline"
+  },
+  "homepage": "https://github.com/Timmy-Lane/prd-pipeline",
+  "repository": "https://github.com/Timmy-Lane/prd-pipeline",
+  "license": "MIT",
+  "keywords": ["prd", "spec", "workflow", "tdd", "worktrees", "parallel-agents", "pipeline"],
+  "dependencies": ["compound-v", "bad-research"]
+}

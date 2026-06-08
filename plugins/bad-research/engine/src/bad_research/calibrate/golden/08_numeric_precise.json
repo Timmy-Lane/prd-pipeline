@@ -1,0 +1,22 @@
+{
+  "id": "08_numeric_precise",
+  "query": "What is the speed of light in a vacuum, and how is the metre defined from it?",
+  "report": "# Speed of light and the definition of the metre\n\nThe speed of light in a vacuum is exactly 299,792,458 metres per second [1]. Since 1983 the metre has been defined as the distance light travels in a vacuum in 1/299,792,458 of a second, which fixes the speed of light by definition [2].\n",
+  "corpus": [
+    {"note_id": "1", "url": "https://physics.nist.gov/speed-of-light", "text": "The speed of light in a vacuum is exactly 299,792,458 metres per second."},
+    {"note_id": "2", "url": "https://www.bipm.org/en/metre-definition", "text": "Since 1983 the metre is defined as the distance light travels in a vacuum in 1/299,792,458 of a second, fixing the speed of light by definition."}
+  ],
+  "expected_behavior": [
+    "reports the exact figure 299,792,458 m/s",
+    "explains the 1983 metre definition derived from it",
+    "numbers match the corpus exactly (no rounding error)"
+  ],
+  "axes_floor": {"factual": "pass", "citation": "pass"},
+  "components": {
+    "decompose": {
+      "decomp": {"sub_questions": ["speed of light in vacuum?", "how is the metre defined?"], "entities": ["speed of light", "metre"], "time_periods": [], "response_format": "short", "contradiction_terms": [], "domains": ["physics"]},
+      "expected_route": "fast"
+    },
+    "retrieval": {"expect_note_ids": ["1", "2"]}
+  }
+}

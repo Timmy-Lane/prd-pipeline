@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 — 2026-06-08
+
+Repackaged as a **self-contained Claude Code plugin marketplace** so a user installs everything through `/plugins` with nothing extra to fetch. prd-pipeline no longer depends on a separately-installed `superpowers` plugin; it now composes the **bundled compound-v** skill set and the **bundled bad-research** deep-research engine, both vendored into this repo and pulled in automatically as plugin dependencies.
+
+- **New layout:** repo root is a marketplace (`.claude-plugin/marketplace.json`) shipping three plugins under `plugins/` — `prd-pipeline`, `compound-v` (vendored from LeventySeven/compound-v), `bad-research` (vendored from LeventySeven/badresearch).
+- **One-command install:** `/plugin marketplace add Timmy-Lane/prd-pipeline` → `/plugin install prd-pipeline@prd-pipeline`. The other two auto-install/enable (same-marketplace `dependencies`).
+- **Skill rewiring (superpowers → compound-v):** `brainstorming`, `writing-plans`, `test-driven-development`, `verification-before-completion` map 1:1; `subagent-driven-development` → `batched-implementation`; `finishing-a-development-branch` → `finishing`. Folded in compound-v's net-new skills where there's a real slot — `critical-thinking` (grill lens), `agent-security` + `recheck` (review), `startup-taste`/`product-taste` (spec).
+- **Research engine:** the `deep-research`/`deep-researcher` fallback is replaced by the bundled `bad-research` engine (with Claude-native WebSearch/WebFetch fallback). Its prompt skills + 16 agents load instantly; the Python `bad` CLI self-bootstraps into the plugin data dir on first use (needs Python 3.11–3.13 + uv/pipx; keyless base, no ML stack). bad-research's internal `Skill()` calls were namespaced to `bad-research:…` (plugin skills require the qualified form); its agents resolve by bare name.
+- **Always-on trigger re-homed:** plugins don't load `rules`/`CLAUDE.md`, so the workflow trigger moved into a minimal `SessionStart` router hook in the prd-pipeline plugin.
+- **Legacy `bin/prd` installer retained** as a non-plugin alternative; its dependency check now reports `compound-v` + `bad-research` instead of `superpowers`/`deep-research`.
+
 ## 0.4.0 — 2026-06-04
 
 Spec-corpus visibility + a consistency audit (spec `docs/specs/0003-prd-audit.md`). Until now the repo accumulated specs with no at-a-glance view of the corpus and nothing that checked a spec's declared lifecycle state was still internally consistent or true.
