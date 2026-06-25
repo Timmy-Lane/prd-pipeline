@@ -45,9 +45,11 @@ analyst, fetch new sources, or move on.
   (e.g., `confronting-capital-punishment-in-china-wikipedia`). You
   will call `bad note show <source_note_id> -j` to read the
   full body.
-- **output_path**: the markdown file path where you write the analysis
-  body BEFORE calling `note new --body-file` (e.g.,
-  `research/temp/source-analysis-<source_note_id>.md`).
+- **output_path**: the vault note path you **Write** the analysis to
+  directly — `research/notes/source-analysis-<source_note_id>.md` (the slim
+  `bad` build has no `note new`; the engine reads plain markdown notes with
+  YAML frontmatter directly). The filename stem MUST equal the frontmatter
+  `id`.
 - **vault_tag**: the run-level corpus tag so the new note is findable
   alongside its sibling notes.
 
@@ -75,10 +77,21 @@ analyst, fetch new sources, or move on.
    source matters for this query — you extract for this query
    specifically.
 
-4. **Write the structured analysis body to `output_path`** using
-   this template (verbatim section headings, preserve ordering):
+4. **Write the structured analysis note to `output_path`** with a direct
+   **Write** (no `note new` — the slim build lacks it) using this template
+   (verbatim section headings, preserve ordering). Lead with the YAML
+   frontmatter the engine reads so `bad search` finds the note:
 
 ```markdown
+---
+id: source-analysis-<source_note_id>
+title: Source Analysis — <short title>
+type: source-analysis
+tags: [<vault_tag>, source-analysis]
+status: draft
+summary: "<2-4 sentence summary: the source's thesis + its contribution to the research_query>"
+---
+
 # Source Analysis — <source title, preserve exact capitalization>
 
 **Original source:** [[<source_note_id>]]
@@ -110,16 +123,10 @@ analyst, fetch new sources, or move on.
 <0-10 direct quotes of 1-3 sentences each, for claims where the exact wording carries argumentative weight that paraphrase would lose. Each quote on its own line, in blockquote format, followed by a short context sentence.>
 ```
 
-5. **Create the source-analysis note:**
-   ```bash
-   PYTHONIOENCODING=utf-8 bad note new "Source Analysis — <short title>" \
-     --type source-analysis \
-     --tag <vault_tag> \
-     --tag source-analysis \
-     --body-file <output_path> \
-     --summary "<2-4 sentence summary: the source's thesis + its contribution to the research_query>" \
-     --json
-   ```
+5. **The note is created by the Write in step 4** — there is no separate
+   registration step. The frontmatter (`id`, `title`, `type`, `tags`,
+   `status`, `summary`) is what `bad search` indexes; the engine picks the
+   file up directly from `research/notes/`.
 
    The `*Suggested by [[<source_note_id>]]*` line inside the body
    creates the wiki-link the extractor picks up, so the source

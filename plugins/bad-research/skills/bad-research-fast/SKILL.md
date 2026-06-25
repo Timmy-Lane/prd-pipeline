@@ -79,7 +79,11 @@ loop counters, not model claims — the stop is auditable even if the model lies
 **Read figures (you are natively multimodal):** if a source's substance is in a
 figure/chart/table-image, or in a scanned (text-layerless) PDF, the text layer is empty
 and the fetch path has already saved the rendered pixels as a PNG asset bound to the
-note. Resolve it with `bad assets list --note-id <note-id> --json`, then
+note. Asset resolution is an ENHANCEMENT, not core — gate on
+`research/cli-caps.json -> assets` (else probe `bad assets --help >/dev/null 2>&1`
+first); if the `assets` command is absent, treat figures as "no assets available" and
+still ship the text answer rather than aborting. When available, resolve it with
+`bad assets list --note-id <note-id> --json`, then
 `bad assets path <asset-id>`, and use the `Read` tool on that PNG to transcribe the data
 into the note VERBATIM (the numbers exactly as plotted/printed), citing it as a figure.
 The transcription you write into the note body becomes the claim's `quoted_support`, so

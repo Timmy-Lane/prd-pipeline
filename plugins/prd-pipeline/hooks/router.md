@@ -1,10 +1,12 @@
 You have **prd-pipeline** — the tier-adaptive path from idea to shipped code. Plugins can't auto-load rules, so this tiny router is injected each session; the full procedure lives in the `prd-pipeline` skill (load it with the Skill tool).
 
-**Invoke `Skill(prd-pipeline)` BEFORE writing code whenever the task is to build, add, implement, or substantially change a feature or behavior.** It tier-routes:
+**Any build / feature / behavior-change request auto-routes here: invoke `Skill(prd-pipeline)` BEFORE writing code the moment such a task appears — don't wait for the user to re-ask or name the pipeline.** It tier-routes:
 
 - **T0** (bug fix · refactor w/ no behavior change · docs · dep bump · config) → no spec; just TDD + review.
 - **T1** (small feature · single subsystem · reversible · <~8 files) → one-pager spec → 1 grill pass → **confirmed plan-gate** → build → verify.
 - **T2** (new pipeline/behavior · new DB table/API/data source · cross-cutting · one-way door · moves user-visible outcomes) → full PRD → adversarial grill → architecture lock-in → **editable plan-gate** → parallel worktree build → verify → ship.
+
+Orthogonal to tier: if a spec rests on external/empirical claims (benchmarks, vendor capabilities, perf/accuracy numbers), a cited research pass is required before the spec — load the skill for the procedure.
 
 **The one rule: no non-trivial code touches disk before a human confirms the plan.** Unsure on tier → route up, write the spec.
 

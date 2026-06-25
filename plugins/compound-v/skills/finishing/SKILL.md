@@ -19,6 +19,8 @@ Run the full suite this turn and read the exit code yourself — the **compound-
 
 The finishing-specific rule: a red suite is **not** a finishing situation. **Stop**, surface the failure, and route back to **compound-v:systematic-debugging** — never present the finish menu on red, because every option below assumes a green branch.
 
+**If the change targeted a metric — cost, latency, quality, a behavior — "green suite" is not "finished."** The intended effect must be *measured* with a real post-ship query/run, not asserted: the suite proves the code is correct, not that the number moved. Run the query that reads the actual metric and confirm it shifted as intended. If measurement is blocked (no traffic yet, needs a prod window), say so and explicitly track/schedule it — never silently declare done. And sanity-check any auto-generated metric before relaying it — timezone, confounds, selection bias — a clean-looking number computed wrong is worse than no number.
+
 ## Step 2 — Present the options, let the user pick
 
 Offer a small structured menu, not an open-ended "what now?":

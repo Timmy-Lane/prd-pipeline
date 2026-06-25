@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "prd-pipeline",
   "displayName": "PRD Pipeline",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Tier-adaptive feature-development pipeline for Claude Code: idea -> spec/PRD -> adversarial grill -> confirmed plan-gate -> parallel worktree build -> verify -> ship. No non-trivial code without a confirmed plan; parallel agents in isolated git worktrees; verification before done.",
   "author": {
     "name": "Timmy-Lane",

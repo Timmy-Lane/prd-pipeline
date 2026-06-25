@@ -183,8 +183,11 @@ Before you invoke any step skill, do this:
 0. **Auto-init if missing.** Two checks for the first-run-after-global-install case:
    - **Vault check.** If `.hyperresearch/` doesn't exist in the working directory, run `bad init . --json`. Creates the SQLite vault (the `research/` source store — every fetched source becomes a note here) and the `research/` directory.
    - **Step-skills check.** No lazy install needed — every step skill ships bundled inside this plugin (`bad-research:bad-research-N-...`), so the `Skill(skill: "bad-research:bad-research-N-...")` calls in later steps resolve directly. (Legacy standalone installs materialized these per-project via `bad install --steps-only`; the plugin makes that unnecessary.)
+   - **Capability probe (run AFTER `bad init`, BEFORE any tier runs).** A present binary is not a capable binary — some builds (e.g. slim `bad` v0.1.0) ship `doctor`/`search`/`note show`/`route` but LACK `fetch` and `assets`. Probe with `bad doctor -j` (exists on every build) plus `bad fetch --help` and `bad assets --help`, and record availability to `research/cli-caps.json`, e.g. `{"doctor":true,"fetch":false,"assets":false}` (a non-zero exit / "unknown command" on the `--help` probe means the subcommand is absent). Every downstream step MUST read `research/cli-caps.json` to choose CLI-vs-native for fetch/asset work.
 
    If `bad init` fails because the binary isn't on PATH, the bad-research plugin auto-bootstraps the `bad` engine into its plugin data dir on first use — re-run once it reports ready, or tell the user their machine needs Python 3.11–3.13 + `uv`/`pipx`. The `bad init` command no-ops cheaply when the vault already exists — safe to run unconditionally.
+
+   **Present-but-slim is NOT bootstrapped.** If the probe shows `fetch`/`assets` absent, do NOT claim the engine bootstrapped — set the whole run to the **file-based fallback path**: fetchers use native `WebFetch`/`WebSearch` and write notes directly into `research/`, and every step reads `research/cli-caps.json` to pick CLI-vs-native per call. A slim v0.1.0 build lacking `fetch` must **DEGRADE to native fetch, never abort.**
 
 0.5. **Archive any prior run's artifacts.** Run `hyperresearch archive-run --json`. If a previous `/hyperresearch` session left a scaffold, loci.json, comparisons.md, critic-findings, patch-log, polish-log, prompt-decomposition, or any `research/temp/*` scratch, this moves the whole set into `research/runs/archive-<prev-tag>-<UTC-timestamp>/` so the new run starts from a clean slate without losing the prior run's audit trail. Final reports (`research/notes/final_report_<tag>.md`) and canonical query files (`research/query-<tag>.md`) are already namespaced and stay in place. The command no-ops cheaply on a fresh vault — safe to run unconditionally. **Caveat:** this protects sequential runs only. Two `/hyperresearch` invocations that overlap in time still race on the new files they both write; if you need true parallel runs, namespace per-run artifacts under `research/runs/<vault_tag>/` instead.
 
@@ -378,6 +381,12 @@ If any rule returns `error` severity issues, address them before declaring compl
 ## Why the multi-skill chain
 
 One monolithic skill loaded once gets compacted away mid-run, and the orchestrator silently degrades (drops the corpus critic, replaces the triple-draft ensemble with a single draft, ships a flat report). The chain makes re-reading structural: each step skill loads fresh via the `Skill` tool at the moment it's needed, is self-contained, and reads its inputs from disk — so compaction can evict an old step's procedure without harm. The cost is one extra `Skill` invocation per step; the gain is structural — a long `full` run cannot silently collapse into its single-draft fallback when an early step's procedure gets compacted out of context mid-run.
+
+---
+
+## Reporting engine bugs
+
+CLI/engine bugs (a missing subcommand, a slim build, a `bad` crash) belong in the **upstream `LeventySeven/badresearch` tracker**, NOT the consuming project's repo. Cross-org issue transfer may be blocked, so file a fresh issue upstream and close the consuming-repo one with a link rather than attempting `gh issue transfer`.
 
 ---
 

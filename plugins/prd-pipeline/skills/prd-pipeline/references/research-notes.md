@@ -88,9 +88,9 @@ Borrow bad-research's step-1.6 plan-gate + Claude Code plan mode: **emit the pla
 **Claude Code does this NATIVELY — no external tool required:**
 - Agent tool `isolation: "worktree"` (or the `--worktree` launch flag) spins up a fresh worktree + dedicated branch under `.claude/worktrees/`, runs the agent there, **auto-cleans if unchanged**.
 - Plan mode, memory, hooks, permissions, and the transcript all attach to the **worktree, not the original repo** — so two agents each have their own plan and never see each other's edits. [Claude Code docs]
-- **The user's main tree never moves.** Verified in this repo: native worktrees create `worktree-agent-<id>` branches, `.claude/worktrees/` is gitignored and the branches are `locked`. The orchestrator (on the user's current branch) merges each agent's disjoint-file branch back with `git merge` — no `git checkout` on the user's side, ever.
+- **The user's main tree never moves.** Native worktrees create `worktree-agent-<id>` branches, `.claude/worktrees/` is gitignored and the branches are `locked`. The orchestrator (on the user's current branch) merges each agent's disjoint-file branch back with `git merge` — no `git checkout` on the user's side, ever.
 - **Concurrency ceiling: 4-8 worktrees per developer reliably; above that you're bottlenecked on review, not on Claude.** [Claude Code worktree guides]
-- **Operational gotcha (verified here):** 25 leftover locked worktrees had accumulated. Merge-back MUST be followed by explicit cleanup (`git worktree remove` + delete merged branch), else they pile up.
+- **Operational gotcha:** leftover locked worktrees accumulate. Merge-back MUST be followed by explicit cleanup (`git worktree remove` + delete merged branch), else they pile up.
 
 **OSS landscape (managers layered on the same git-worktree primitive — adopt only if a GUI/queue is wanted):**
 - **Conductor** (Mac, melty labs) — visual dashboard + diff-first review, many Claude Code/Codex agents in parallel, each its own worktree.
@@ -102,7 +102,7 @@ Borrow bad-research's step-1.6 plan-gate + Claude Code plan mode: **emit the pla
 > Decision: encode the **native Claude Code mechanism** (zero dependency, matches decision "pure Skill+Agent+git"). Mention these as optional GUIs.
 
 **Spec-driven OSS for the PRD/plan layer (borrow ideas, don't hard-depend):**
-- **GitHub spec-kit** (`specify` — already installed here): `constitution → specify → (clarify) → plan → tasks ([P] parallel markers) → analyze → implement`; explicit human-approval + pre-implementation gates.
+- **GitHub spec-kit** (`specify`): `constitution → specify → (clarify) → plan → tasks ([P] parallel markers) → analyze → implement`; explicit human-approval + pre-implementation gates.
 - **OpenSpec** (Fission-AI): single living spec as authoritative reference, evolves with the codebase.
 - **BMAD-METHOD**: multi-persona agents across the SDLC, file-based context passing, strict role boundaries.
 - **Kiro** (AWS): requirements → design → tasks.

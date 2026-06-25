@@ -26,4 +26,4 @@ Emit the plan (sub-tasks + per-task file scope + risks; **no time estimates**), 
 - Every spawned agent gets the 7-field contract: objective · inputs (incl. exact file scope) · output_shape · tools_allowed · stop_conditions · context · verification.
 
 ## Composes
-`superpowers:brainstorming` (intent) → `/prd-pipeline` (spec + grill + plan-gate) → `deep-research` / `deep-researcher` (research + grill critics) → `superpowers:writing-plans` → `dispatching-parallel-agents` + `subagent-driven-development` + `test-driven-development` → `verification-before-completion` → `code-reviewer`/`security-reviewer` → `finishing-a-development-branch`.
+`compound-v:brainstorming` (intent) → `/prd-pipeline` (spec + grill + plan-gate) → `bad-research` (research + grill critics; native WebSearch/WebFetch fallback) → `compound-v:writing-plans` → `compound-v:dispatching-parallel-agents` + `compound-v:batched-implementation` + `compound-v:test-driven-development` → `compound-v:verification-before-completion` → `code-reviewer`/`security-reviewer`/`compound-v:recheck` → `compound-v:finishing`.

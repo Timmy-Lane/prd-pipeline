@@ -108,15 +108,16 @@ reading of the evidence.
 
 6. **Write ONE interim report note.** This is your single deliverable.
 
-   **BEFORE calling `note new`**, check if an interim note for this locus
+   **BEFORE writing the interim note**, check if one for this locus
    already exists in the vault:
 
    ```bash
-   bad search "" --tag locus-<locus-name> --type interim --json
+   bad search "locus-<locus-name>" --json
    ```
 
    If any results come back, DO NOT create a new note. Instead, either:
-   (a) use `note update` to revise the existing interim note, or
+   (a) revise the existing interim note by **Write**-ing its file in place
+       (same path/`id`, refreshed body), or
    (b) report to the orchestrator that this locus was already investigated
        and explain what you would have added — let the orchestrator decide
        whether to discard your investigation or replace the existing note.
@@ -126,26 +127,23 @@ reading of the evidence.
    accounting. This is a real failure mode observed in past runs; do not
    fall into it.
 
-   If no existing note matches, create the new one. First ensure the
-   temp directory exists, then write the body file and create the note:
-
-```bash
-mkdir -p research/temp
-```
-
-```bash
-bad note new "Interim report — <locus name>" \
-  --tag <corpus_tag> \
-  --tag locus-<locus-name> \
-  --type interim \
-  --body-file research/temp/interim-report-<locus-name>.md \
-  --summary "<one-line summary of what you found>" \
-  --json
-```
-
-The body must contain:
+   If no existing note matches, create the new one with a direct **Write**
+   to `research/notes/<id>.md` (the slim `bad` build has no `note new`
+   subcommand; the engine reads plain markdown notes with YAML frontmatter
+   directly). Use a stable kebab-case `id` like `interim-<locus-name>`; the
+   filename stem MUST equal the frontmatter `id`. The file must carry the
+   frontmatter the engine reads, then the body below:
 
 ```markdown
+---
+id: interim-<locus-name>
+title: Interim report — <locus name>
+type: interim
+tags: [<corpus_tag>, locus-<locus-name>]
+status: draft
+summary: "<one-line summary of what you found>"
+---
+
 # Interim report: {locus.name}
 
 **Locus question:** {locus.one_line}

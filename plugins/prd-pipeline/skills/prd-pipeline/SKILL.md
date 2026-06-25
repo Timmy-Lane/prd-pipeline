@@ -30,7 +30,12 @@ plan before code touches disk.** Everything else serves that.
 
 ## Step 0 — Load project context + seed todos (always)
 
-**Preflight — verify dependencies first.** This skill composes others; confirm they're available before running (scan your available-skills list + tools). **`git` is a hard requirement** (the worktree build needs it) — if absent, STOP and tell the user. The **compound-v** skills (`brainstorming`, `writing-plans`, `batched-implementation`, `dispatching-parallel-agents`, `test-driven-development`, `verification-before-completion`, `finishing`, plus `critical-thinking` · `agent-security` · `recheck` · `startup-taste`) and the **bad-research** deep-research engine ship as bundled plugin dependencies — installing prd-pipeline pulls them in automatically, so they should already be present. If a composed skill is somehow missing, note it once and use the inline fallback from the Composition map; the research engine degrades to Claude-native WebSearch/WebFetch if the bad-research Python engine hasn't bootstrapped. The native `Agent(isolation:"worktree")` is always present in Claude Code. Surface gaps up front; never fail silently mid-run. (`prd doctor` runs the same check from the shell.)
+**Preflight — verify dependencies first (don't assume; check).** This skill composes others; confirm each is *actually* available before running, and report any gap up front. **`git` is a hard requirement** (the worktree build needs it) — if absent, STOP and tell the user. Then:
+- **compound-v skills** — confirm each required one (`brainstorming`, `writing-plans`, `batched-implementation`, `dispatching-parallel-agents`, `test-driven-development`, `verification-before-completion`, `finishing`, plus `critical-thinking` · `agent-security` · `recheck` · `startup-taste`) appears by name in *this session's* available-skills list. Don't assume the bundle pulled them in — a missing one means use the inline fallback from the Composition map, but only after you've noted which one is absent.
+- **bad-research engine** — probe its real surface, don't assume: run `bad doctor -j` if the `bad` binary is on PATH (its JSON reports the live command set), else note the file-based fallback (the research engine degrades to Claude-native WebSearch/WebFetch when the Python engine hasn't bootstrapped).
+- **native `Agent(isolation:"worktree")`** — always present in Claude Code.
+
+Surface every gap before proceeding; never fail silently mid-run.
 
 1. **Read the project's `CLAUDE.md`** (repo root). Extract, with fallbacks:
    - **Spec directory + template** — where specs/PRDs live (e.g. `docs/prd/`, `docs/rfd/`,
@@ -51,6 +56,10 @@ plan before code touches disk.** Everything else serves that.
 3. **Seed `TodoWrite`** (or your harness's task tool — e.g. `TaskCreate`/`TaskUpdate`) with the
    phases for the chosen tier, in order. The list is your durable memory — it survives context
    compaction. Re-read this file and the spec file if you wake up unsure where you are.
+4. **Worktree sweep (always-start-from-`main` invariant).** Run `git worktree list` and remove any
+   orphaned `.claude/worktrees/*` tree not tied to an active task — `git worktree remove --force`
+   it and prune its dead branch. Then confirm you're on `main`: a T1/T2 build auto-creates its own
+   independent feature branch (Step 5); you never start work from a leftover branch.
 
 > **Lifecycle-field check.** Recovery and Step 6 read the spec's `status:` to know the phase.
 > If the adopted template carries status as prose (`**Status:** Draft`) instead of a
@@ -96,6 +105,12 @@ Run `Skill(compound-v:brainstorming)` first if intent/requirements are not alrea
 UI/UX-bearing spec, `Skill(compound-v:startup-taste)` / `Skill(compound-v:product-taste)` first.
 Then write the spec to the project's spec directory at `status: draft`, using the project
 template (fallback: `references/spec-template.md`).
+
+**Document-quality bar — follow `Skill(compound-v:writing-prd)`** (the canonical PRD/spec
+authoring skill): required sections present and non-empty, alternatives weighed, invalidators as
+concrete-trigger triples, every load-bearing claim sourced or `[ASSUMPTION]`-tagged, lean prose.
+The skeleton below mirrors it for a per-feature spec — keep the two in sync.
+
 The spec is **committed on the feature branch in Step 5** alongside the implementation, so intent
 + code reach `main` together at ship — don't commit it to `main` up front.
 
@@ -106,7 +121,10 @@ customer-framing (working-backwards, 1 paragraph), **Proposed solution + trade-o
 delta / success criteria**, **alternatives considered** (required for T2),
 cross-cutting concerns (security/privacy/observability/cost/data), **Drawbacks / risks /
 hypothesis-invalidators** (observable conditions that mean *roll back*), **Wedge** (narrowest
-valuable slice), open questions. **Prose, not bullets** (writing forces precision). **Fits ~2
+valuable slice), open questions. Any "revisit later" / post-ship verification threshold MUST be a
+concrete **trigger** — N production runs, a named real-world event, or a data-volume threshold —
+**never a calendar-time deferral** ("wait 1-2 weeks", "monitor for N days"); calendar deferrals are
+forbidden as a plan step OR an invalidator condition. **Prose, not bullets** (writing forces precision). **Fits ~2
 pages or it's too broad — split it.** A spec with no "alternatives considered" wasn't designed.
 
 For T1 the spec is a one-pager (Problem · Goals/Non-Goals · Wedge · Success criteria · Risks).
@@ -126,7 +144,7 @@ CLAUDE.md invariants. Nine passes (1–6 generic consistency; 7–9 enforce this
 5. **Inconsistency** — terminology drift vs ADRs; approaches conflicting with shipped specs.
 6. **Duplication** — near-duplicate requirements.
 7. **Template-section coverage** — every section the active template marks **`(required)`** is present AND non-empty (the default template tags them inline; a project template's own required set wins). A missing or stub required section (e.g. **Wedge**, **Alternatives considered** (T2), **Drawbacks/invalidators**) is **CRITICAL**. Don't leave this to interpretation under another pass — check the literal section set.
-8. **Invalidator presence** — the spec contains ≥1 hypothesis-invalidator stated as a triple: *observable condition → how it's measured → that it means roll back*. An aspirational target ("we aim for −25%") is NOT an invalidator. Zero such triples = **CRITICAL**. (Lens 2 of the grill critiques invalidator *quality*; this pass enforces their *existence*.)
+8. **Invalidator presence** — the spec contains ≥1 hypothesis-invalidator stated as a triple: *observable condition → how it's measured → that it means roll back*. An aspirational target ("we aim for −25%") is NOT an invalidator. Its trigger MUST be concrete — N production runs, a named real-world event, or a data-volume threshold; a calendar-time deferral ("wait 1-2 weeks", "monitor for N days") is **CRITICAL** (forbidden as an invalidator condition or plan step). Zero valid triples = **CRITICAL**. (Lens 2 of the grill critiques invalidator *quality*; this pass enforces their *existence*.)
 9. **Claim↔source binding** — every load-bearing quantitative/empirical claim (a number, "improves X by N%", "research shows", "industry-standard", a vendor capability) either cites a source (research note / benchmark / ADR), is the spec's own post-ship success criterion, or is tagged `[ASSUMPTION]`/`[NEEDS CLARIFICATION]`. An unsourced load-bearing number is **CRITICAL** — it's the line between a grounded spec and a plausible-sounding hollow one. (Reuses the Step 6.2b citation-verifier pattern at spec-time.)
 
 Output: `<spec-dir>/<spec>-analysis.md` — a findings table (severity · location · summary · fix).
@@ -136,6 +154,10 @@ Output: `<spec-dir>/<spec>-analysis.md` — a findings table (severity · locati
 ---
 
 ## Step 3 — Grill (adversarial review of the spec)
+
+**Surface the grill as an explicit todo** — seed a `TodoWrite` entry like `grill: done/skipped`
+that MUST be ticked before the plan-gate (Step 4). A forgotten grill is then observable on the
+list, not silently skipped. (T0 skips the grill; for T1/T2 it is non-skippable.)
 
 Find problems; do NOT propose fixes (that's Step 4). Use the project grill skill if present
 (e.g. `Skill(grill-prd)`); otherwise run the built-in grill:
@@ -148,8 +170,10 @@ Find problems; do NOT propose fixes (that's Step 4). Use the project grill skill
   critics hide failure modes, diverse lenses surface them:
   1. **Architecture/conflict** — contradicts an existing decision (ADR)? duplicates shipped
      scope? inconsistent with how the system works today? violates a project invariant?
-  2. **Edge-case/invalidator** — is there ≥1 invalidator *at all*, and is it measurable?
-     success criteria with no measurement plan? null/empty/race/restart/partial-failure/rate-limit/cap-exhaustion?
+  2. **Edge-case/invalidator** — is there ≥1 invalidator *at all*, and is it measurable? Is its
+     trigger concrete (N production runs / named event / data-volume threshold) rather than a
+     forbidden calendar-time deferral ("wait 1-2 weeks", "monitor for N days")? success criteria
+     with no measurement plan? null/empty/race/restart/partial-failure/rate-limit/cap-exhaustion?
   3. **Cost/ops/telemetry** — cost math shown? operator knobs in the right place (config vs
      env)? telemetry to query it later? backwards-compat for existing data?
   4. **Pre-mortem** — "it's a year later and this shipped and failed: list the causes." (+30%
@@ -174,6 +198,11 @@ Produce the implementation plan. For T2 use the project architecture-review skil
 > Output an **ordered task list where each task touches DISJOINT files** so parallel agents
 > don't collide. Cross-cutting edits (shared types, config, schema, build files, CLAUDE.md,
 > docs) **serialize after** the parallel block."
+
+**Ordered-migration caution (a consequence of this pipeline's own parallel-worktree/branch model).**
+When a branch-merged build introduces a timestamp- or sequence-keyed migration journal, the merge
+step MUST verify the journal stays strictly monotonic — an out-of-order branch merge can land a
+migration whose key predates an already-applied one, and the runner then silently skips it.
 
 The plan MUST have: disjoint-file task partition · ordered phases with named dependencies ·
 test plan (the commands the reviewer runs) · rollback/reversibility · risks + blast radius.
@@ -221,8 +250,11 @@ time. The user never `git checkout`s, never manually branches, never gets pulled
   so `main` is never half-built. The orchestrator never `git checkout`s the user's tree.
 - **Each task does TDD** (`Skill(compound-v:test-driven-development)`): test first (RED) →
   minimal impl (GREEN) → refactor.
-- **Cleanup is part of the task.** After merging a worktree branch, `git worktree remove` it
-  and delete the merged branch — leftover locked worktrees pile up otherwise.
+- **Cleanup is part of the task — on success AND on failure.** After merging a worktree branch,
+  `git worktree remove` it and delete the merged branch. When a worktree agent **fails or is
+  abandoned** (not just on a clean merge), `git worktree remove --force` its tree and prune the
+  dead branch too — leftover locked worktrees pile up otherwise. (Step 0 and Step 6 also sweep
+  `git worktree list` for orphans not tied to an active task.)
 - **Concurrency ceiling: 4–8 worktrees.** Above that you're bottlenecked on review, not on
   Claude. Cross-cutting edits run serially AFTER the parallel block, on the user's branch.
 
@@ -243,6 +275,11 @@ its own throwaway branch if you want PR hygiene. Anything bigger gets the featur
 1. **Verify before claiming done** — `Skill(compound-v:verification-before-completion)`.
    Run the test plan's commands, confirm output. Evidence before assertions. For pipeline /
    agent / behavior changes, run the project's real-run check (the project CLAUDE.md names it).
+   When verification needs a **reversible runtime switch with bounded/metered cost** (a feature
+   flag, a category enable, a shadow→on toggle), own the full loop yourself — enable → observe
+   without incurring extra cost → disable — and report the bounded result, rather than handing a
+   reversible switch to the user. Still escalate for **irreversible / destructive / large-sustained-cost**
+   actions.
 2. **Auto code review** — `code-reviewer` (every diff) · `typescript-reviewer` (TS) ·
    `security-reviewer` (auth/keys/payments/external input) · `database-reviewer` (schema/SQL).
    For a finished batch, add one read-only `Skill(compound-v:recheck)` pass (misalignment ·
@@ -258,7 +295,9 @@ its own throwaway branch if you want PR hygiene. Anything bigger gets the featur
 4. **Mark `status: implemented`** in the spec; it stays as the record of what was decided and why.
 5. **Ship** — `Skill(compound-v:finishing)` → integrate the feature branch
    into `main` (merge or PR) per the project's git convention (PRs only when asked), then prune
-   its worktree. This is the ONLY moment `main` changes.
+   its worktree. This is the ONLY moment `main` changes. **Sweep before exit:** `git worktree list`
+   and `git worktree remove --force` any orphaned `.claude/worktrees/*` not tied to an active task,
+   pruning dead branches — leave the tree on a clean `main`.
 
 ---
 

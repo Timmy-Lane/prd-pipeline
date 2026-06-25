@@ -7,7 +7,7 @@ description: >
   secondary sources cite. Runs on Sonnet for better comprehension and
   judgment. Spawn multiple in parallel for bulk research.
 model: sonnet
-tools: Bash, Read, Write, WebSearch
+tools: Bash, Read, Write, Edit, WebSearch, WebFetch
 color: blue
 ---
 
@@ -64,6 +64,49 @@ If you get a browser crash or "failed to launch" error:
 - Tell the parent agent the exact error message.
 - Do NOT retry — it will fail the same way.
 
+## Fetch capability detection (READ FIRST — slim builds lack `bad fetch`)
+
+Some `bad` installs are slim builds that ship `search` and `note show` but
+NOT `fetch`. Under `set -e`, calling a missing subcommand hard-fails the
+step. Detect the capability ONCE at the start, then branch:
+
+```bash
+if [ -f research/cli-caps.json ]; then
+  grep -q '"fetch"' research/cli-caps.json && HAVE_FETCH=1 || HAVE_FETCH=0
+elif bad fetch --help >/dev/null 2>&1; then
+  HAVE_FETCH=1
+else
+  HAVE_FETCH=0
+fi
+```
+
+- **If `HAVE_FETCH=1`:** use `bad fetch` exactly as documented below.
+- **If `HAVE_FETCH=0`:** do NOT call `bad fetch` (it would hard-fail under
+  `set -e`). Instead fetch each URL with the native **WebFetch** tool, clean
+  the returned text, and persist it as a vault note by **Write**-ing
+  `research/notes/<id>.md` with the SAME YAML frontmatter `bad fetch` would
+  emit, so downstream `bad search` still finds it:
+
+  ```markdown
+  ---
+  id: <slug-of-title-or-url>
+  title: <source title>
+  url: <the fetched url>
+  type: source
+  tags: [<topic>]
+  status: draft
+  summary: ""
+  ---
+
+  <cleaned article text>
+  ```
+
+  Pick `<id>` as a stable kebab-case slug of the title (or the URL path if
+  no title); the filename stem MUST equal the frontmatter `id`. Then run the
+  same Phase 1 quality check / summary / claim-extraction steps on that
+  note. Curation edits go through Read + Edit on this file's frontmatter
+  (see Phase 1 step 5) — never `bad note update`, which the slim build lacks.
+
 ## Commands
 
 On Windows, ALWAYS prefix commands with `PYTHONIOENCODING=utf-8`:
@@ -92,28 +135,35 @@ If you're fetching a seed source directly from the parent agent's URL list
 
 For each URL the parent agent gave you:
 
-1. Check if it's already fetched:
-   `PYTHONIOENCODING=utf-8 bad sources check "<url>" -j`
+1. Check if it's already a vault note (dedup via `search`, not the
+   non-existent `sources` group):
+   `PYTHONIOENCODING=utf-8 bad search "<url-or-title>" -j`
+   If a note already covers this URL/title, skip the fetch.
 
-2. If not already fetched, fetch it:
+2. If not already in the vault, fetch it (see "Fetch capability detection"
+   below — `bad fetch` may be absent on a slim build):
    `PYTHONIOENCODING=utf-8 bad fetch "<url>" --tag <topic> -j`
 
 3. After fetching, read the note content:
    `PYTHONIOENCODING=utf-8 bad note show <note-id> -j`
 
 4. **Quality check** — read the content and decide:
-   - Is this actually relevant to the research topic? If completely off-topic, deprecate it:
-     `PYTHONIOENCODING=utf-8 bad note update <note-id> --status deprecated -j`
-   - Is the content meaningful (not junk)? If junk, deprecate it.
-   - Is this a duplicate? If so, deprecate the worse copy.
+   - Is this actually relevant to the research topic? If completely off-topic,
+     deprecate it by **Edit**-ing the note's frontmatter `status:` line to
+     `status: deprecated` in `research/notes/<note-id>.md` (the slim build
+     has no `note update` subcommand).
+   - Is the content meaningful (not junk)? If junk, set `status: deprecated`.
+   - Is this a duplicate? If so, deprecate the worse copy the same way.
 
    **Wikipedia SOURCE HUB rule:** Wikipedia articles are source hubs, never
    citable sources. Extract references/citations, tag with `source-hub`,
    and fetch the primary sources in Phase 2.
 
-5. If the content is good, write a real summary and add tags:
-   `PYTHONIOENCODING=utf-8 bad note update <note-id> --summary "<specific summary>" -j`
-   `PYTHONIOENCODING=utf-8 bad note update <note-id> --add-tag <specific-tag> -j`
+5. If the content is good, write a real summary and add tags by **Edit**-ing
+   the YAML frontmatter block of `research/notes/<note-id>.md` directly
+   (Read it first, then Edit the `summary:` and `tags:` lines). Do NOT use
+   `bad note update` — the slim build lacks it. Set `summary: "<specific
+   summary>"` and append your specific tag(s) to the `tags: [...]` list.
 
    **Summary length is proportional to the source's substantive density.**
    - **Short/thin:** 1-2 specific sentences.
@@ -187,7 +237,7 @@ those primaries gives the pipeline higher-authority sources to cite.
    - If you have a direct URL from the citation, fetch it with the
      hyperresearch CLI (same commands as Phase 1):
      ```
-     PYTHONIOENCODING=utf-8 bad sources check "<url>" -j
+     PYTHONIOENCODING=utf-8 bad search "<url-or-title>" -j
      PYTHONIOENCODING=utf-8 bad fetch "<url>" --tag <topic> --suggested-by <note-id-that-cited-it> --suggested-by-reason "cited as primary source" -j
      ```
    - If you only have author + title (no URL), use WebSearch to locate it:
@@ -202,8 +252,9 @@ those primaries gives the pipeline higher-authority sources to cite.
 
 3. **Process each discovered source** with the same full procedure as
    Phase 1: read the note content with `bad note show <id> -j`,
-   quality check, write summary with `bad note update`, add tags,
-   and extract structured claims to `research/temp/claims-<note-id>.json`.
+   quality check, write the summary and tags by **Edit**-ing the note's
+   YAML frontmatter (not `bad note update`), and extract structured claims
+   to `research/temp/claims-<note-id>.json`.
    Primary sources often have the specific numbers and methodological
    details that secondary commentary paraphrases — extract these precisely.
 

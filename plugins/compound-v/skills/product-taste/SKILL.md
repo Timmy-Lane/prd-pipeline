@@ -25,7 +25,7 @@ Useful drills: "If a rival shipped this, would I be impressed or relieved?" "Nam
 AI hands you mediocre defaults; the skill is knowing which to override (the load-bearing ones, not all). The slop aesthetic is recognizable — grep your own output for it, and each hit carries its fix:
 - Uniform rounded corners on everything → pick a radius scale on purpose, or square the cases that should read as structural.
 - Gradients that don't match the brand → drop them or pull from the actual palette.
-- Copy edited to be **inoffensive instead of clear** → rewrite for clarity and opinion (pairs with the `humanizer` skill).
+- Copy edited to be **inoffensive instead of clear** → rewrite for clarity and opinion.
 - Layouts grid-perfect but tonally flat → add deliberate emphasis/asymmetry; flatness is the absence of a hierarchy decision.
 - Default easing curves → set an `ease-out` (or a spring), never ship linear.
 - **Generic empty state** → make it the onboarding: prompt to create the first item, with optional templates.

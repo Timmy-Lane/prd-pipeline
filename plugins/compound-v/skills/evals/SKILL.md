@@ -34,6 +34,8 @@ Almost always a **handful of failure types dominate** the long tail — a few bu
 
 Generic off-the-shelf metrics are *worse than useless* here — a rising "helpfulness score" while users can't complete the task is "optimizing page-load time while checkout is broken." Build the taxonomy from *your* failures, not a vendor's metric list.
 
+When a case needs **ground truth**, never let the model's own prior output be the gold label — an extracted count, an attribution, a summary it produced. Anchor the label to an externally resolved/authoritative source instead. If the same model both generates *and* grades the answer, a systematic error is invisible: it scores its own mistake as correct, and the eval certifies the bug.
+
 ## Judges: binary + a written critique
 
 When you do need an LLM to grade open-ended output:
