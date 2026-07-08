@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2 — 2026-07-08
+
+- **compound-v — new `code-reviewer` agent (0.2.2).** The spawnable, read-only agent form of the `recheck` skill: reads the actual diff, re-runs the tests itself, returns severity-tagged findings + one verdict (APPROVED / FIX_REQUIRED / ARCHITECTURE_CONCERN). Tool-locked to `Read/Grep/Glob/Bash` (never edits — the implementer applies fixes), `model: opus`. Closes the gap where `Agent(subagent_type: "code-reviewer")` (referenced by downstream project CLAUDE.md files inherited from the retired gstack/superpowers stack) resolved to nothing; use `compound-v:code-reviewer` or the `/code-review` skill.
+
 ## 0.5.1 — 2026-06-25
 
 Resilience + experience-driven hardening across all three bundled plugins (no breaking changes).
