@@ -1,7 +1,7 @@
 {
   "name": "compound-v",
-  "description": "Compound V — a lean, opinionated skill set for shipping great software with agentic AI: product & startup taste, real context engineering, security-first review, and a no-bullshit / no-overkill workflow. Superpowers, but better.",
-  "version": "0.2.2",
+  "description": "Compound V \u2014 a lean, opinionated skill set for shipping great software with agentic AI: product & startup taste, real context engineering, security-first review, TDD, and the tier-adaptive prd-pipeline build path (spec/PRD -> adversarial grill -> confirmed plan-gate -> parallel worktree build -> verify -> ship). No bullshit, no overkill.",
+  "version": "0.3.0",
   "author": {
     "name": "Slava",
     "email": "olor.guard@gmail.com"

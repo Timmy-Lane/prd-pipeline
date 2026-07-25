@@ -324,7 +324,7 @@ its own throwaway branch if you want PR hygiene. Anything bigger gets the featur
 1. Check the `TodoWrite` list — it carries the phase you're on.
 2. Check disk: the spec file's `status:` (draft = pre-gate; accepted = plan confirmed,
    implementing; implemented = done) and any merged worktree branches.
-3. Resume from the next incomplete phase. Re-invoke `Skill(prd-pipeline)` to reload this file.
+3. Resume from the next incomplete phase. Re-invoke `Skill(compound-v:prd-pipeline)` to reload this file.
 
 ## Composition map
 

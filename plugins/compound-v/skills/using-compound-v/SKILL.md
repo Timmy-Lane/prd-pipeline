@@ -22,16 +22,23 @@ User CLAUDE.md > Compound V skills > default behavior. If the user's instruction
 
 ## Tier routing — smallest box that fits; route *down* when unsure
 
-The kit's bet is that adaptive effort is something the model is increasingly good at on its own; this table makes that judgment explicit rather than trusting it implicitly (anti-overkill law, a JUDGMENT-CALL stance — `references/sources.md` → using-compound-v). Use it as the explicit floor, not a replacement for judgment.
+One table governs both the skill kit and the build pipeline. Adaptive effort is something the model is increasingly good at on its own; this makes that judgment explicit rather than trusting it implicitly (anti-overkill law, a JUDGMENT-CALL stance — `references/sources.md` → using-compound-v). Use it as the explicit floor, not a replacement for judgment.
+
+**Any build / feature / behavior-change request routes here before code is written** — don't wait to be asked and don't wait for the pipeline to be named.
 
 | Tier | Trigger | Workflow |
 |---|---|---|
-| **Trivial** | typo, rename, one-liner, config flip | Just do it → `verification-before-completion`. No plan, no agents. |
-| **Small** | one function/file, clear spec | inline `test-driven-development` → verify. Skip the plan doc. |
-| **Standard** | a feature, ~2–8 tasks | (open "should we?" → `startup-taste` first) → `brainstorming` → `writing-plans` → `batched-implementation` → `recheck`. |
-| **Large** | multiple subsystems | split into sub-projects; each runs its own Standard cycle. |
+| **Trivial** | typo, rename, one-liner, config flip | Just do it → `verification-before-completion`. No spec, no plan, no agents. |
+| **Small** | one function/file, clear spec; bug fix; refactor with no behavior change; docs; dep bump | inline `test-driven-development` → `recheck`. Skip the plan doc. |
+| **Standard** | a feature, ~2–8 tasks, single subsystem, reversible, under ~8 files | (open "should we?" → `startup-taste` first) → `brainstorming` → one-pager spec → 1 grill pass → **confirmed plan-gate** → `batched-implementation` → `recheck` |
+| **Large** | new pipeline or behavior · new DB table / API / data source · cross-cutting · one-way door · moves user-visible outcomes | `Skill(compound-v:prd-pipeline)` — full PRD → adversarial grill → architecture lock-in → **editable plan-gate** → parallel worktree build → verify → `finishing` |
+
+**The one rule: no non-trivial code touches disk before a human confirms the plan.** Unsure on tier → route up and write the spec.
+
+Orthogonal to tier: if a spec rests on external or empirical claims (benchmarks, vendor capabilities, perf/accuracy numbers, "is X better than Y"), run `Skill(bad-research:bad-research)` before the spec. Never ad-hoc WebSearch for anything that will be acted on.
 
 ## Other skills
+- **Build pipeline:** `prd-pipeline` (the Large-tier path: PRD → grill → plan-gate → parallel worktree build → ship)
 - **Judgment:** `startup-taste` · `product-taste`
 - **Plan:** `brainstorming` · `writing-plans` (per-build plan) · `writing-prd` (the product's stable source-of-truth doc)
 - **Thinking:** `critical-thinking` (red-team your own reasoning before you commit — steelman + disconfirm)
