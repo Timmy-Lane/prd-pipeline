@@ -1,41 +1,64 @@
 # STATE — prd-pipeline — rewritten 2026-07-28
 
 ## Goal
-prd-pipeline installed as a standalone plugin, three upstream PRs merged, and no skill
-listed twice in the session.
+Every skill on this machine either ships in a plugin or symlinks into a git clone, so nothing is a
+hand-copy that rots. Three upstream PRs merged. No skill listed twice.
 
 ## Done
-- prd-pipeline 1.0.0 pushed (`95fb5f4`). Standalone plugin, doc-routing + one-document-per-change,
-  run log for compaction recovery. Marketplace = 5 plugins (prd-pipeline, compound-v, bad-research,
-  silver, superdesign); compound-v is pulled live, no longer vendored at a stale 0.3.0.
-  evidence: `bash tests/smoke.sh` -> "All 115 assertions passed"; `bash tests/bundle-consistency.sh`
-  -> "bundle consistent"
-- Duplicate `~/.claude/commands/workflow-investigation.md` deleted, and the local skill copy no
-  longer hardcodes `/Users/admin`. evidence: `grep -c /Users/admin ~/.claude/skills/workflow-investigation/SKILL.md` -> 0
-- Marketplace manifest was **invalid** and nothing new could install from it. `"source": {"source":
-  "git", ...}` is not a legal plugin source — the legal object forms are `url` and `git-subdir`
-  (see `~/.claude/plugins/marketplaces/claude-plugins-official`). compound-v switched to `url`;
-  silver dropped, because its `master` still has no plugin manifest (that is silver#2, unmerged) so
-  the entry advertised an install that 404s. evidence: `claude plugin validate .` -> "Validation
-  passed" (was "Found 2 errors"), `bash tests/smoke.sh` -> 115/115, `bash tests/bundle-consistency.sh`
-  -> "bundle consistent". Uncommitted — commit and push before step 2, the installer reads the
-  pushed clone, not this tree.
+- Marketplace manifest fixed and pushed (`8e66c98`). `"source": {"source":"git"}` is not a legal
+  plugin source — only `url` and `git-subdir` are. compound-v now uses `url`; silver is out until
+  its manifest reaches `master` (silver#2). evidence: `claude plugin validate .` -> "Validation passed".
+- Plugins now: prd-pipeline 1.0.0, compound-v 0.5.0, bad-research 0.1.1. The 0.3.0 -> 0.5.0 jump
+  dropped the folded `compound-v:prd-pipeline`, so installing prd-pipeline closed the gap rather
+  than duplicating it. evidence: a fresh `claude -p` skill listing shows `prd-pipeline:prd-pipeline`
+  once and no `compound-v:prd-pipeline`.
+- **All five loose skills are now symlinks into their source clones**, plus the four silver
+  commands. Old copies moved to `~/.claude/backups/skills-pre-symlink-20260728-195748` (nothing
+  deleted). Proof the copies were rotting: `~/.claude/skills/silver/skill-data/core/SKILL.md` was
+  3 days behind its clone and missing the `silver.json` privilege-escalation fix.
+  | link | target |
+  |---|---|
+  | silver | `~/Documents/GitHub/silver/silver` |
+  | superdesign | `~/Documents/GitHub/prd-pipeline/plugins/superdesign/skills/superdesign` |
+  | founder-distribution, handoff | `~/Documents/GitHub/compound-v/skills/*` |
+  | workflow-investigation | `~/Documents/GitHub/workflow-investigation/skills/workflow-investigation` |
+  evidence: a fresh `claude -p` session lists all five — symlinked skill dirs load fine.
+- `~/.claude/scripts/update-skills.sh` — checks every symlink, pulls each source clone, updates the
+  marketplaces, exits 1 on drift. evidence: run shows 9/9 links ok and names the two clones that
+  cannot pull.
+- Russian removed from everything the model reads: the `handoff` description and the CLAUDE.md
+  config map. **Deliberately kept** in `hooks/verify-claim.sh` and `hooks/secrets-guard.sh` — those
+  are grep, and grep does not translate; dropping the Russian alternatives blinds both guards.
+
+- **founder-distribution is now grounded.** It was the only skill in compound-v dense with empirical
+  claims and no `references/sources.md` entry, while its own honest-warrant section demanded three
+  warrant tiers. A full-route bad-research run (10 parallel fetchers, 14 sub-questions, 164 sources,
+  ~200 verbatim-grounded claims) produced a `## founder-distribution` section, appended to
+  `~/Documents/GitHub/compound-v/references/sources.md` (+54 lines, uncommitted).
+  **Three of its nine claims do not survive as written:** "several scaled to millions with no push
+  feature at all" (no supporting instance exists), "almost every company got its first thousand from
+  one channel" (Traction prescribes parallel testing first and addresses a later stage entirely), and
+  the gate rule's non-transferability condition (Gmail, Clubhouse and Robinhood all violate it). Two
+  more are contradicted outright: "the highest-friction users drown first" and "fix retention before
+  optimizing acquisition" (Ehrenberg-Bass: the belief is held "without any evidence").
+  Only `brainstorming` and `handoff` now lack a sources entry, and both are pure procedure.
+- Engine bug found and worked around: `bad funnel-gather` exits 0 but its search fan-out ignores the
+  plan and returns junk (Google login pages, an IELTS test). `bad fetch <url>` and `bad search` are
+  separately unreliable — `search` reported 15 notes while `research/notes/` held 164 files. File the
+  bug in `LeventySeven/badresearch`, not here.
 
 ## Next
-1. Commit + push the marketplace fix, then `claude plugin marketplace update prd-pipeline`.
-   Nothing below works until origin/main carries a manifest that validates.
-2. `claude plugin install prd-pipeline@prd-pipeline` (installs 1.0.0), **then**
-   `claude plugin update compound-v@prd-pipeline` (0.3.0 -> 0.5.0). That order, because the
-   installed compound-v 0.3.0 still carries the folded `compound-v:prd-pipeline` skill; updating
-   first leaves a window with no pipeline, installing first leaves a brief duplicate.
+1. `cd ~/Documents/GitHub/silver && git push -u origin feat/claude-code-plugin` — that branch tracks
+   no remote, so the silver skill currently cannot be updated by anything.
+2. `cd ~/Documents/GitHub/compound-v` — commit two things into PR #9: the `skills/handoff/SKILL.md`
+   frontmatter edit (English trigger + `argument-hint`) and the new `references/sources.md` section.
+   Until they are committed, update-skills.sh skips that clone. Then decide whether to apply the
+   rewrites the section recommends to `skills/founder-distribution/SKILL.md` itself — the grounding
+   is done, the edit to the skill body is not.
 3. Merge the three PRs (no push rights to LeventySeven from this machine — see Do not):
-   compound-v#9, silver#2, workflow-investigation#2. silver stays out of the marketplace until #2
-   merges; founder-distribution and handoff stay local until #9 merges.
-4. After 2 and 3: `~/.claude/skills/superdesign` is a byte-identical duplicate of
-   `plugins/superdesign/skills/superdesign` (`diff -rq` -> empty) and can go once
-   `superdesign@prd-pipeline` is installed. **Do not delete founder-distribution or handoff** —
-   they ship in no plugin today; they arrive only with compound-v#9. Leave
-   `~/.claude/skills/{silver,workflow-investigation}` alone; both stay non-plugin installs.
+   compound-v#9, silver#2, workflow-investigation#2.
+4. **After compound-v#9 merges and compound-v updates**, delete the `founder-distribution` and
+   `handoff` symlinks — the plugin will ship both and they would list twice.
 
 ## Open decisions
 - workflow-investigation PR: the BAD_GUIDE sweep wording. The old repo copy said "two copies, read
@@ -45,15 +68,16 @@ listed twice in the session.
 
 ## Verify with
 ```bash
-bash tests/smoke.sh && bash tests/bundle-consistency.sh
+bash tests/smoke.sh && bash tests/bundle-consistency.sh && claude plugin validate .
+~/.claude/scripts/update-skills.sh
 ```
 
 ## Do not
-- Do not try to `git push` to any `LeventySeven/*` repo: `gh` is authenticated as Timmy-Lane only
-  and no SSH key is authorized -> 403. Use `gh repo fork` + `gh pr create -R LeventySeven/...`.
+- Do not copy a skill into `~/.claude/skills/`. Symlink the clone. Every copy here has gone stale.
+- Do not `git push` to any `LeventySeven/*` repo: `gh` is authenticated as Timmy-Lane, which has
+  `push: false` on all of them. Use `gh repo fork` + `gh pr create -R LeventySeven/...`.
 - Do not put workflow-investigation in a marketplace. Private, internal repo; npx only.
 - Do not re-vendor compound-v. That is what pinned it at 0.3.0 while upstream reached 0.5.0.
-- Do not list a plugin whose source repo does not carry `.claude-plugin/plugin.json` on its default
-  branch. A manifest that only exists on an open PR branch is not installable, and
-  `claude plugin validate .` will not catch that — it checks the source *shape*, not that the
-  target resolves. Check with `gh api repos/<owner>/<repo>/contents/.claude-plugin` first.
+- Do not list a plugin whose source repo lacks `.claude-plugin/plugin.json` on its **default
+  branch**. A manifest that only exists on an open PR branch is not installable, and
+  `claude plugin validate .` will not catch it — it checks the source shape, not that it resolves.
