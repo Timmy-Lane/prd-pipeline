@@ -12,17 +12,30 @@ listed twice in the session.
   -> "bundle consistent"
 - Duplicate `~/.claude/commands/workflow-investigation.md` deleted, and the local skill copy no
   longer hardcodes `/Users/admin`. evidence: `grep -c /Users/admin ~/.claude/skills/workflow-investigation/SKILL.md` -> 0
+- Marketplace manifest was **invalid** and nothing new could install from it. `"source": {"source":
+  "git", ...}` is not a legal plugin source — the legal object forms are `url` and `git-subdir`
+  (see `~/.claude/plugins/marketplaces/claude-plugins-official`). compound-v switched to `url`;
+  silver dropped, because its `master` still has no plugin manifest (that is silver#2, unmerged) so
+  the entry advertised an install that 404s. evidence: `claude plugin validate .` -> "Validation
+  passed" (was "Found 2 errors"), `bash tests/smoke.sh` -> 115/115, `bash tests/bundle-consistency.sh`
+  -> "bundle consistent". Uncommitted — commit and push before step 2, the installer reads the
+  pushed clone, not this tree.
 
 ## Next
-1. Merge the three PRs (no push rights to LeventySeven from this machine — see Do not):
-   compound-v#9, silver#2, workflow-investigation#2.
-2. `/plugin marketplace update prd-pipeline` then `/plugin install prd-pipeline@prd-pipeline`.
-   **Order matters:** the marketplace has `autoUpdate: true`, and compound-v no longer carries the
-   prd-pipeline skill. If the auto-update lands before the install, there is a window with no
-   pipeline at all.
-3. Only after 2 succeeds: `rm -rf ~/.claude/skills/{silver,superdesign,founder-distribution,handoff}`
-   — those five now ship inside plugins and would otherwise list twice. Leave
-   `~/.claude/skills/workflow-investigation` alone; it stays an npx install by design.
+1. Commit + push the marketplace fix, then `claude plugin marketplace update prd-pipeline`.
+   Nothing below works until origin/main carries a manifest that validates.
+2. `claude plugin install prd-pipeline@prd-pipeline` (installs 1.0.0), **then**
+   `claude plugin update compound-v@prd-pipeline` (0.3.0 -> 0.5.0). That order, because the
+   installed compound-v 0.3.0 still carries the folded `compound-v:prd-pipeline` skill; updating
+   first leaves a window with no pipeline, installing first leaves a brief duplicate.
+3. Merge the three PRs (no push rights to LeventySeven from this machine — see Do not):
+   compound-v#9, silver#2, workflow-investigation#2. silver stays out of the marketplace until #2
+   merges; founder-distribution and handoff stay local until #9 merges.
+4. After 2 and 3: `~/.claude/skills/superdesign` is a byte-identical duplicate of
+   `plugins/superdesign/skills/superdesign` (`diff -rq` -> empty) and can go once
+   `superdesign@prd-pipeline` is installed. **Do not delete founder-distribution or handoff** —
+   they ship in no plugin today; they arrive only with compound-v#9. Leave
+   `~/.claude/skills/{silver,workflow-investigation}` alone; both stay non-plugin installs.
 
 ## Open decisions
 - workflow-investigation PR: the BAD_GUIDE sweep wording. The old repo copy said "two copies, read
@@ -40,3 +53,7 @@ bash tests/smoke.sh && bash tests/bundle-consistency.sh
   and no SSH key is authorized -> 403. Use `gh repo fork` + `gh pr create -R LeventySeven/...`.
 - Do not put workflow-investigation in a marketplace. Private, internal repo; npx only.
 - Do not re-vendor compound-v. That is what pinned it at 0.3.0 while upstream reached 0.5.0.
+- Do not list a plugin whose source repo does not carry `.claude-plugin/plugin.json` on its default
+  branch. A manifest that only exists on an open PR branch is not installable, and
+  `claude plugin validate .` will not catch that — it checks the source *shape*, not that the
+  target resolves. Check with `gh api repos/<owner>/<repo>/contents/.claude-plugin` first.

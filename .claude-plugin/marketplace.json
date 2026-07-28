@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "prd-pipeline",
-  "description": "One marketplace for the whole stack: the tier-adaptive prd-pipeline build path, the Compound V skill set, the Bad Research deep-research engine, the silver keyless browser, and superdesign. Each plugin stands alone; install only what you want.",
+  "description": "One marketplace for the whole stack: the tier-adaptive prd-pipeline build path, the Compound V skill set, the Bad Research deep-research engine, and superdesign. Each plugin stands alone; install only what you want.",
   "owner": {
     "name": "Timmy-Lane",
     "url": "https://github.com/Timmy-Lane/prd-pipeline"
@@ -16,7 +16,7 @@
     {
       "name": "compound-v",
       "source": {
-        "source": "git",
+        "source": "url",
         "url": "https://github.com/LeventySeven/compound-v.git"
       },
       "category": "workflow",
@@ -27,15 +27,6 @@
       "source": "./plugins/bad-research",
       "category": "research",
       "description": "Deep, multi-source, fully-cited research. Tier-adaptive: a bounded question gets a fast cited answer; a broad or contested one gets the full adversarially-reviewed report with every claim bound to a source. Prompt skills + 16 agents load instantly; the Python `bad` engine self-bootstraps on first use (needs Python 3.11-3.13 and uv or pipx)."
-    },
-    {
-      "name": "silver",
-      "source": {
-        "source": "git",
-        "url": "https://github.com/LeventySeven/silver.git"
-      },
-      "category": "web",
-      "description": "A keyless local headless browser for AI agents (Playwright; never calls a model or an API). Drives live pages through accessibility-tree snapshots with stable @eN refs: open, click, fill, log in, extract a table to JSON with real links, monitor for change, QA-drive an app, or run a durable multi-step job that survives a crashed agent. Ships the skill and the /quick, /extract, /parallel, /task commands; needs the `silver` CLI on PATH (npm i -g agent-silver)."
     },
     {
       "name": "superdesign",
