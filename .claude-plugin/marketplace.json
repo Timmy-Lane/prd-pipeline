@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "prd-pipeline",
-  "description": "One marketplace for the whole stack: the tier-adaptive prd-pipeline build path, the Compound V skill set, the Bad Research deep-research engine, the silver keyless browser, workflow-investigation's primary-source sweep, and superdesign. Each plugin stands alone; install only what you want.",
+  "description": "One marketplace for the whole stack: the tier-adaptive prd-pipeline build path, the Compound V skill set, the Bad Research deep-research engine, the silver keyless browser, and superdesign. Each plugin stands alone; install only what you want.",
   "owner": {
     "name": "Timmy-Lane",
     "url": "https://github.com/Timmy-Lane/prd-pipeline"
@@ -36,15 +36,6 @@
       },
       "category": "web",
       "description": "A keyless local headless browser for AI agents (Playwright; never calls a model or an API). Drives live pages through accessibility-tree snapshots with stable @eN refs: open, click, fill, log in, extract a table to JSON with real links, monitor for change, QA-drive an app, or run a durable multi-step job that survives a crashed agent. Ships the skill and the /quick, /extract, /parallel, /task commands; needs the `silver` CLI on PATH (npm i -g agent-silver)."
-    },
-    {
-      "name": "workflow-investigation",
-      "source": {
-        "source": "git",
-        "url": "https://github.com/LeventySeven/workflow-investigation.git"
-      },
-      "category": "research",
-      "description": "Ground research, design, architecture, or any load-bearing decision in RAW PRIMARY SOURCES before acting. Fans out parallel agents that each READ the actual essay, talk, repo, paper, teardown, or code and return findings carrying their evidence — a verbatim quote plus an exact location — never a lossy digest and never bare pointers. Scales from a QUICK per-source sweep to a DEEP fan-out of 4+ agents per source plus an adversarial pass."
     },
     {
       "name": "superdesign",

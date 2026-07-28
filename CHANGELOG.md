@@ -24,7 +24,7 @@ The old pipeline emitted three permanent files per T2 feature (spec, a sibling `
 
 ### Marketplace — all six plugins, and no more stale vendoring
 - **compound-v is no longer vendored.** The bundled fork was pinned at 0.3.0 while upstream had reached 0.5.0, so seven skills (`code-review`, `extracting-specs`, `frame-the-goal`, `make-it-stable`, `simplest-thing-that-works`, `ai-system-reliability`, `architecting-ai-systems`), the `user-prompt-submit` re-assertion hook, and the trigger-eval harness were all silently missing. The entry now points at `LeventySeven/compound-v` live. The `code-reviewer` agent added here in 0.5.2 was pushed upstream rather than dropped.
-- **Added `silver`** ([LeventySeven/silver](https://github.com/LeventySeven/silver)) and **`workflow-investigation`** ([LeventySeven/workflow-investigation](https://github.com/LeventySeven/workflow-investigation)), both live from their own repos, which gained plugin manifests upstream.
+- **Added `silver`** ([LeventySeven/silver](https://github.com/LeventySeven/silver)), live from its own repo, which gained a plugin manifest upstream. `workflow-investigation` is deliberately **not** here — a plugin is installed from a marketplace, and that repo is private and internal, so it stays on its `npx github:` install path.
 - **Added `superdesign`**, vendored (its upstream repo is a research/eval repo, not a skill package).
 - **No plugin depends on another** any more — install any subset.
 

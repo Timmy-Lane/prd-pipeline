@@ -33,12 +33,10 @@ below happens to be installed, it uses it, and if not, it uses its own inline pr
 | **compound-v** | ~28 short skills for the judgment around the code: startup / product / distribution taste, plans, TDD, systematic debugging, verification, read-only review, agent security, evals, context engineering. | [LeventySeven/compound-v](https://github.com/LeventySeven/compound-v), live |
 | **bad-research** | Deep, multi-source, fully-cited research; tier-adaptive, adversarially reviewed. | vendored, from [LeventySeven/badresearch](https://github.com/LeventySeven/badresearch) |
 | **silver** | A keyless local headless browser for AI agents — drives live pages via accessibility-tree snapshots with stable `@eN` refs, so fabricated URLs are impossible. Needs the `silver` CLI. | [LeventySeven/silver](https://github.com/LeventySeven/silver), live |
-| **workflow-investigation** | Grounds a decision in RAW primary sources: parallel agents that each *read* the actual essay, repo, or paper and return a verbatim quote plus an exact location. | [LeventySeven/workflow-investigation](https://github.com/LeventySeven/workflow-investigation), live |
 | **superdesign** | Brand-specific UI with React + Tailwind v4 + shadcn/ui: brand → OKLCH tokens → pattern cookbook → anti-slop and a11y gates. | this repo |
 
-Install them individually — none depends on another. `compound-v`, `silver` and
-`workflow-investigation` are pulled **live from their own repos** rather than copied in here, so
-they cannot go stale behind upstream.
+Install them individually — none depends on another. `compound-v` and `silver` are pulled **live
+from their own repos** rather than copied in here, so they cannot go stale behind upstream.
 
 > **bad-research engine — one-time caveat.** Its skills and agents load instantly with zero setup.
 > The deep-research **engine** is a small Python CLI (`bad`) that the plugin self-bootstraps into
