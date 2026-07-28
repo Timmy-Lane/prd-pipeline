@@ -1,0 +1,207 @@
+/* ============================================================================
+   superdesign — Tailwind v4 token theme (light + dark)
+   ----------------------------------------------------------------------------
+   Drop this into app/globals.css. It is the DEFAULT SaaS-minimal preset seeded
+   with a deliberate cobalt brand hue (H=240) — NOT the reflexive indigo #6366F1.
+
+   To re-skin to a brand: change the brand ramp's hue angle H (search "240"),
+   or swap in a preset from references/brand-to-system.md. Everything else
+   (spacing, radius, type, motion) is brand-agnostic.
+
+   Author in OKLCH. Every runtime-swappable value flows through @theme inline so
+   `bg-primary` / `text-muted-foreground` / `rounded-lg` / `shadow-md` resolve.
+   OKLCH is Baseline Widely Available (since 2023); ship without fallbacks unless
+   you must support legacy/IE clients (then add a hex fallback on the few brand vars).
+   ============================================================================ */
+
+@import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* personality dial — one number re-skins every corner (see tokens.md §6) */
+  --radius: 0.625rem;                        /* 10px base (general SaaS) */
+
+  /* interaction-state overlay math (tokens.md §10) */
+  --overlay-hover: 0.08;
+  --overlay-press: 0.10;
+
+  /* --- core surfaces --- */
+  --background: oklch(1 0 0);                --foreground: oklch(0.205 0.006 240);
+  --card: oklch(1 0 0);                      --card-foreground: oklch(0.205 0.006 240);
+  --popover: oklch(1 0 0);                   --popover-foreground: oklch(0.205 0.006 240);
+  --muted: oklch(0.970 0.003 240);          --muted-foreground: oklch(0.54 0.010 240);   /* AA 4.5:1 even on bg-muted */
+
+  /* --- brand / actions (accent lives in the 10% lane) --- */
+  --primary: oklch(0.53 0.17 240);        --primary-foreground: oklch(0.985 0.002 240);
+  --secondary: oklch(0.970 0.003 240);      --secondary-foreground: oklch(0.269 0.007 240);
+  --accent: oklch(0.936 0.032 240);         --accent-foreground: oklch(0.396 0.100 240);
+
+  /* --- semantic feedback (base = solid fill, -foreground = on-color) --- */
+  --success: oklch(0.53 0.15 150);          --success-foreground: oklch(0.985 0 0);       /* darkened → AA 4.5:1 on white text */
+  --warning: oklch(0.850 0.160 85);         --warning-foreground: oklch(0.280 0.070 70);  /* DARK on-text (light fill) */
+  --destructive: oklch(0.577 0.245 27);     --destructive-foreground: oklch(0.985 0 0);   /* 4.56:1 */
+  --info: oklch(0.55 0.19 259);             --info-foreground: oklch(0.985 0 0);          /* darkened → AA 4.5:1 */
+
+  /* --- lines --- */
+  --border: oklch(0.922 0.004 240);         --input: oklch(0.922 0.004 240);
+  --ring: oklch(0.53 0.17 240);           /* focus ring = brand; must clear 3:1 vs adjacent */
+
+  /* --- sidebar (own tinted scale; never pure C=0) --- */
+  --sidebar: oklch(0.985 0.003 240);            --sidebar-foreground: oklch(0.269 0.007 240);
+  --sidebar-primary: oklch(0.53 0.17 240);      --sidebar-primary-foreground: oklch(0.985 0.002 240);
+  --sidebar-accent: oklch(0.955 0.004 240);     --sidebar-accent-foreground: oklch(0.269 0.007 240);
+  --sidebar-border: oklch(0.922 0.004 240);     --sidebar-ring: oklch(0.53 0.17 240);
+
+  /* --- tone-based elevation surfaces --- */
+  --surface-container:         oklch(0.985 0.002 240);
+  --surface-container-high:    oklch(0.970 0.003 240);
+  --surface-container-highest: oklch(0.955 0.004 240);
+
+  /* --- charts (own sub-system; never reuse semantic hues for categories) --- */
+  --chart-1: oklch(0.646 0.222 41);  --chart-2: oklch(0.600 0.118 185);
+  --chart-3: oklch(0.398 0.130 250); --chart-4: oklch(0.828 0.189 84);
+  --chart-5: oklch(0.640 0.245 16);
+
+  /* --- durations (used via transition/animation) --- */
+  --duration-instant: 100ms;  --duration-fast: 150ms;  --duration-base: 200ms;
+  --duration-slow: 300ms;     --duration-slower: 500ms;
+}
+
+.dark {
+  --background: oklch(0.145 0.006 240);      --foreground: oklch(0.985 0.002 240);   /* tinted near-black, never #000 */
+  --card: oklch(0.205 0.006 240);           --card-foreground: oklch(0.985 0.002 240);
+  --popover: oklch(0.205 0.006 240);        --popover-foreground: oklch(0.985 0.002 240);
+  --muted: oklch(0.269 0.007 240);          --muted-foreground: oklch(0.708 0.007 240);
+
+  /* brand LIGHTENS + DESATURATES in dark (same hue): +L, -C. Flip on-text. */
+  --primary: oklch(0.704 0.140 240);        --primary-foreground: oklch(0.205 0.006 240);
+  --secondary: oklch(0.269 0.007 240);      --secondary-foreground: oklch(0.985 0.002 240);
+  --accent: oklch(0.320 0.070 240);         --accent-foreground: oklch(0.985 0.002 240);
+
+  --success: oklch(0.723 0.150 150);        --success-foreground: oklch(0.205 0.006 240);
+  --warning: oklch(0.860 0.140 85);         --warning-foreground: oklch(0.280 0.070 70);
+  --destructive: oklch(0.704 0.191 22);     --destructive-foreground: oklch(0.205 0.006 240);
+  --info: oklch(0.715 0.150 255);           --info-foreground: oklch(0.205 0.006 240);
+
+  /* translucent-white lines read softer than solid gray on dark */
+  --border: oklch(1 0 0 / 10%);             --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0.008 240);
+
+  /* --- sidebar (dark, tinted) --- */
+  --sidebar: oklch(0.205 0.006 240);            --sidebar-foreground: oklch(0.985 0.002 240);
+  --sidebar-primary: oklch(0.704 0.140 240);    --sidebar-primary-foreground: oklch(0.205 0.006 240);
+  --sidebar-accent: oklch(0.269 0.007 240);     --sidebar-accent-foreground: oklch(0.985 0.002 240);
+  --sidebar-border: oklch(1 0 0 / 10%);         --sidebar-ring: oklch(0.556 0.008 240);
+
+  /* dark elevation = LIGHTER surface, not deeper shadow */
+  --surface-container:         oklch(0.240 0.007 240);
+  --surface-container-high:    oklch(0.280 0.007 240);
+  --surface-container-highest: oklch(0.320 0.008 240);
+
+  --chart-1: oklch(0.488 0.243 264); --chart-2: oklch(0.696 0.170 162);
+  --chart-3: oklch(0.769 0.188 70);  --chart-4: oklch(0.627 0.265 304);
+  --chart-5: oklch(0.645 0.246 16);
+}
+
+/* Map runtime vars into Tailwind's namespaces (must be `inline` because they
+   reference other vars — the dark-mode case). Adds `bg-*`, `text-*`, `rounded-*`. */
+@theme inline {
+  --color-background: var(--background);         --color-foreground: var(--foreground);
+  --color-card: var(--card);                     --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);               --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);               --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);           --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);                   --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);                 --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);               --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);               --color-warning-foreground: var(--warning-foreground);
+  --color-destructive: var(--destructive);       --color-destructive-foreground: var(--destructive-foreground);
+  --color-info: var(--info);                     --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);                 --color-input: var(--input);   --color-ring: var(--ring);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+  --color-chart-1: var(--chart-1); --color-chart-2: var(--chart-2); --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4); --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);                   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);     --color-sidebar-ring: var(--sidebar-ring);
+
+  /* radius scale derived from ONE base (shadcn canonical) */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 14px);
+}
+
+/* Static design tokens (no var references → plain @theme). */
+@theme {
+  /* type scale — line-height shrinks as size grows */
+  --text-xs: 0.75rem;    --text-xs--line-height: 1.333;
+  --text-sm: 0.875rem;   --text-sm--line-height: 1.429;
+  --text-base: 1rem;     --text-base--line-height: 1.5;
+  --text-lg: 1.125rem;   --text-lg--line-height: 1.556;
+  --text-xl: 1.25rem;    --text-xl--line-height: 1.4;
+  --text-2xl: 1.5rem;    --text-2xl--line-height: 1.333;
+  --text-3xl: 1.875rem;  --text-3xl--line-height: 1.2;
+  --text-4xl: 2.25rem;   --text-4xl--line-height: 1.111;
+  --text-5xl: 3rem;      --text-5xl--line-height: 1;
+  --text-6xl: 3.75rem;   --text-6xl--line-height: 1;
+
+  --font-weight-normal: 400;   --font-weight-medium: 500;
+  --font-weight-semibold: 600; --font-weight-bold: 700;
+
+  /* tracking — tighten large, loosen small; uppercase gets POSITIVE tracking */
+  --tracking-tight: -0.022em;  --tracking-snug: -0.014em;  --tracking-normal: -0.011em;
+  --tracking-wide: 0em;        --tracking-caps: 0.06em;
+
+  /* spacing base (Tailwind v4): every p-/gap-/w- utility = calc(--spacing * n) */
+  --spacing: 0.25rem;
+
+  /* role-named elevation — hairline ring fused in; light mode */
+  --shadow-xs:  0 0 0 1px oklch(0.145 0.006 240 / 0.04), 0 1px 2px 0 oklch(0.145 0.006 240 / 0.06);
+  --shadow-sm:  0 0 0 1px oklch(0.145 0.006 240 / 0.04), 0 1px 3px 0 oklch(0.145 0.006 240 / 0.10),
+                0 1px 2px -1px oklch(0.145 0.006 240 / 0.10);
+  --shadow-md:  0 0 0 1px oklch(0.145 0.006 240 / 0.04), 0 4px 6px -1px oklch(0.145 0.006 240 / 0.10),
+                0 2px 4px -2px oklch(0.145 0.006 240 / 0.10);
+  --shadow-lg:  0 0 0 1px oklch(0.145 0.006 240 / 0.04), 0 10px 15px -3px oklch(0.145 0.006 240 / 0.10),
+                0 4px 6px -4px oklch(0.145 0.006 240 / 0.10);
+  --shadow-xl:  0 0 0 1px oklch(0.145 0.006 240 / 0.04), 0 20px 25px -5px oklch(0.145 0.006 240 / 0.10),
+                0 8px 10px -6px oklch(0.145 0.006 240 / 0.10);
+  --shadow-2xl: 0 25px 50px -12px oklch(0.145 0.006 240 / 0.25);
+
+  /* motion — two-curve vocabulary covers ~90%; default ease-out, never ease-in for UI */
+  --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);   /* entrances, reveals */
+  --ease-ios:       cubic-bezier(0.32, 0.72, 0, 1);   /* micro-interactions, sheets */
+  --ease-standard:  cubic-bezier(0.2, 0, 0, 1);       /* on-screen morph */
+
+  /* FONTS — replace with the brand's real choice. Do NOT ship Inter/Roboto/system,
+     nor the escape-hatch clichés (Space Grotesk / Geist / Instrument-Serif italic) by reflex. */
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --font-serif: ui-serif, Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body {
+    @apply bg-background text-foreground;
+    /* font-feature-settings: "cv11", "ss01";  — enable ONLY if the chosen face ships these OpenType features */
+    -webkit-font-smoothing: antialiased;
+  }
+  /* tabular figures on data cells kill digit jump */
+  th, td, [data-numeric] { font-variant-numeric: tabular-nums; }
+}
+
+/* Reduced motion — REDUCE (cross-fade), don't delete feedback. Required, not optional. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

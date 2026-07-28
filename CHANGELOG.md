@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.0.0 — 2026-07-28
+
+**prd-pipeline is a standalone plugin again, and it stops writing documents nobody reads.**
+
+### Two regressions fixed
+- **The legacy installer had been broken since 0.5.2.** `refactor(plugins): fold prd-pipeline into compound-v` (3e18801) moved the skill to `plugins/compound-v/skills/prd-pipeline/`, but `bin/prd` still copied from `plugins/prd-pipeline/skills/prd-pipeline` — a path that no longer existed. `tests/smoke.sh` aborted before its first assertion. Restoring the standalone plugin restores the path; the suite is green again.
+- **`install.sh` never took its local-checkout branch.** It probed `$HERE/skills/prd-pipeline/SKILL.md`, the pre-0.5.0 layout, so every run from a clone fell through to a network `git clone` of itself. Now probes the real path.
+
+### prd-pipeline — standalone
+- New `plugins/prd-pipeline/` plugin. **No hard dependency on any other plugin**: `git` is the only requirement, every phase has an inline procedure, and the optional accelerants (compound-v, bad-research) are listed in one clearly-marked table with their fallbacks. Preflight no longer treats a missing skill as a gap to report.
+- **Removed from compound-v**, which never wanted it: upstream's own `references/sources.md` records that prd-pipeline's build machinery is "deliberately NOT adopted — that's per-build process, not PRD content." The vendored fork had regressed that. `using-compound-v` now routes Large-tier work *to* the plugin and says why the copy isn't there, so the two can't drift.
+
+### prd-pipeline — the documentation fix
+The old pipeline emitted three permanent files per T2 feature (spec, a sibling `-analysis.md`, a plan under `docs/plans/`), never read the project's existing documentation before deciding to write more, and never updated what it invalidated.
+- **New Step 1.5 — route against the docs that already exist.** Inventory the repo's documentation into five buckets (product intent · decisions/ADRs · change records · runbooks · reference), then pick exactly one route: **amend** (the default) · **supersede** · **create** · **none**. Then name every doc the change makes wrong; each becomes a plan task.
+- **Artifact budget, as an invariant: one change ⇒ at most one new document.** The consistency findings and the implementation plan are now **sections of the change file**, not siblings. T0 and T1 produce **zero** documents — T1's spec and plan are confirmed in the conversation and land in the commit message. Only T2 writes a file.
+- **Doc-sync gate at ship (Step 6.4).** The stale-doc list is walked and each entry verified updated before the branch merges. A change that invalidates documentation has not shipped.
+- **Fold-down at ship.** The change file's durable content moves into the living spec or an ADR and the change is archived, so scaffolding stops accumulating. (OpenSpec's persistent-specs / ephemeral-changes split; `references/research-notes.md` §8, with spec-kit and Diátaxis.)
+- **Stage verdicts persist to disk** — append-only `.claude/prd-pipeline/<change-id>.jsonl`, one line per stage. Compaction re-attaches only the most recent invocation of a skill, so a long run loses which alternative was rejected and what the human approved; Recovery now reads the log instead of guessing. (LeventySeven/compound-v#7.)
+- `references/spec-template.md` → `change-template.md`: `routing:` and `stale_docs:` frontmatter, and inline placeholders for the findings and plan sections that used to be separate files.
+- Step 2.5 drops from nine passes to eight and gains the routing check: an existing document covering ≥60% of the surface is a CRITICAL routing error, not a style note.
+
+### Marketplace — all six plugins, and no more stale vendoring
+- **compound-v is no longer vendored.** The bundled fork was pinned at 0.3.0 while upstream had reached 0.5.0, so seven skills (`code-review`, `extracting-specs`, `frame-the-goal`, `make-it-stable`, `simplest-thing-that-works`, `ai-system-reliability`, `architecting-ai-systems`), the `user-prompt-submit` re-assertion hook, and the trigger-eval harness were all silently missing. The entry now points at `LeventySeven/compound-v` live. The `code-reviewer` agent added here in 0.5.2 was pushed upstream rather than dropped.
+- **Added `silver`** ([LeventySeven/silver](https://github.com/LeventySeven/silver)) and **`workflow-investigation`** ([LeventySeven/workflow-investigation](https://github.com/LeventySeven/workflow-investigation)), both live from their own repos, which gained plugin manifests upstream.
+- **Added `superdesign`**, vendored (its upstream repo is a research/eval repo, not a skill package).
+- **No plugin depends on another** any more — install any subset.
+
+### bad-research
+- The engine's copy of the entry skill told the model to run `bad install --steps-only`, which sprays 19 diverging step-skill directories into the working repo; the plugin copy said the opposite. The engine copy now checks for the namespaced bundled skills first. (Issue #1.)
+- New `tests/bundle-consistency.sh`: every marketplace plugin resolves, every local plugin ships a skill, every `SKILL.md` name matches its directory, and the two bad-research entry-skill copies can't contradict each other again.
+
 ## 0.5.2 — 2026-07-08
 
 - **compound-v — new `code-reviewer` agent (0.2.2).** The spawnable, read-only agent form of the `recheck` skill: reads the actual diff, re-runs the tests itself, returns severity-tagged findings + one verdict (APPROVED / FIX_REQUIRED / ARCHITECTURE_CONCERN). Tool-locked to `Read/Grep/Glob/Bash` (never edits — the implementer applies fixes), `model: opus`. Closes the gap where `Agent(subagent_type: "code-reviewer")` (referenced by downstream project CLAUDE.md files inherited from the retired gstack/superpowers stack) resolved to nothing; use `compound-v:code-reviewer` or the `/code-review` skill.

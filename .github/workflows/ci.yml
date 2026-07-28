@@ -14,3 +14,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run smoke test
         run: bash tests/smoke.sh
+      - name: Check bundle consistency
+        run: bash tests/bundle-consistency.sh

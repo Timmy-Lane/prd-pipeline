@@ -1,73 +1,104 @@
 # prd-pipeline
 
-A tier-adaptive **feature-development pipeline** for Claude Code: idea → spec/PRD → adversarial grill → confirmed plan → parallel worktree build → verified ship. Drops into any repo.
+A tier-adaptive **build pipeline** for Claude Code: idea → the smallest spec that earns its keep →
+adversarial grill → confirmed plan → parallel git-worktree build → verified ship. Drops into any repo.
 
-This repo is a **self-contained Claude Code plugin marketplace**. One `/plugin install` gives you the whole stack — you don't fetch anything separately:
+The repo is also a **Claude Code plugin marketplace**. `prd-pipeline` is one plugin in it and stands
+entirely alone; the others are separate tools that happen to compose well with it.
 
-| Plugin | What it is |
-|---|---|
-| **prd-pipeline** | The orchestrator (this project). Tier-routes a change and runs it spec → grill → plan-gate → parallel worktree build → verify → ship. |
-| **compound-v** | The composed skill set (brainstorming, plans, batched build, TDD, verification, finishing, plus taste / critical-thinking / agent-security / recheck). *Vendored from [LeventySeven/compound-v](https://github.com/LeventySeven/compound-v).* |
-| **bad-research** | The deep, fully-cited research engine prd-pipeline uses for empirical grounding. *Vendored from [LeventySeven/badresearch](https://github.com/LeventySeven/badresearch).* |
+## The two rules
 
-`prd-pipeline` **depends on** the other two, so installing it auto-installs and enables them from this same marketplace.
+1. **No non-trivial code touches disk before a human confirms the plan.**
+2. **A change produces at most one new document, and only when the tier earns it.**
 
-## The one rule
+The second rule exists because the first one, applied naively, produces a repo full of specs nobody
+reads. Writing a PRD is the expensive default, not the safe one.
 
-**No non-trivial code touches disk before a human confirms the plan.** Everything else serves that.
-
-## Install (via `/plugins` — recommended)
-
-In Claude Code:
+## Install
 
 ```
 /plugin marketplace add Timmy-Lane/prd-pipeline
 /plugin install prd-pipeline@prd-pipeline
 ```
 
-That's it. `compound-v` and `bad-research` install automatically (same marketplace, declared as dependencies). Invoke the pipeline with `/prd-pipeline` (it also fires on its own when you ask to build/add/implement a feature).
+Then say what you want to build — the skill fires on its own — or invoke `/prd-pipeline` directly.
+It needs `git` and nothing else. No other plugin is required; if one of the optional accelerants
+below happens to be installed, it uses it, and if not, it uses its own inline procedure.
 
-> **bad-research engine — one-time caveat.** The research *skills and agents* load instantly with zero setup. The actual deep-research **engine** is a small Python CLI (`bad`) that the plugin **self-bootstraps into its own data dir on first use** — you run no commands. It needs **Python 3.11–3.13** (and ideally [`uv`](https://docs.astral.sh/uv/) or `pipx`) on your machine. If that toolchain is absent, prd-pipeline degrades gracefully to Claude-native web search; the core build pipeline never breaks. No heavy ML downloads — the default engine is the keyless base (no torch/transformers).
+## What's in the marketplace
 
-## Tier routing — a spec only when it earns its keep
-
-| Tier | Trigger | Pipeline |
+| Plugin | What it is | Source |
 |---|---|---|
-| **T0 — no spec** | Bug fix · refactor (no behavior change) · docs · dep bump · prompt/threshold tweak vs an existing eval · devops/CI. Two-way door, solution obvious. | Just build it: TDD + code-review. |
-| **T1 — light spec** | Small feature · single subsystem · mostly reversible · <~8 files. | One-pager spec → 1 grill pass → confirmed plan → build → verify. |
-| **T2 — full spec** | New pipeline/behavior · new DB table/column · new public API or data source · cross-cutting · **one-way (irreversible) door** · anything moving user-visible outcomes. | Full PRD → adversarial grill (parallel critics + pre-mortem) → architecture lock-in (disjoint-file task partition) → **editable plan-gate** → parallel worktree build → verify → ship. |
+| **prd-pipeline** | The build pipeline. Tier-routes a change, routes it against the docs that already exist, grills the spec, gates the plan, builds it in parallel worktrees, verifies, ships. | this repo |
+| **compound-v** | ~28 short skills for the judgment around the code: startup / product / distribution taste, plans, TDD, systematic debugging, verification, read-only review, agent security, evals, context engineering. | [LeventySeven/compound-v](https://github.com/LeventySeven/compound-v), live |
+| **bad-research** | Deep, multi-source, fully-cited research; tier-adaptive, adversarially reviewed. | vendored, from [LeventySeven/badresearch](https://github.com/LeventySeven/badresearch) |
+| **silver** | A keyless local headless browser for AI agents — drives live pages via accessibility-tree snapshots with stable `@eN` refs, so fabricated URLs are impossible. Needs the `silver` CLI. | [LeventySeven/silver](https://github.com/LeventySeven/silver), live |
+| **workflow-investigation** | Grounds a decision in RAW primary sources: parallel agents that each *read* the actual essay, repo, or paper and return a verbatim quote plus an exact location. | [LeventySeven/workflow-investigation](https://github.com/LeventySeven/workflow-investigation), live |
+| **superdesign** | Brand-specific UI with React + Tailwind v4 + shadcn/ui: brand → OKLCH tokens → pattern cookbook → anti-slop and a11y gates. | this repo |
 
-Unsure → route up, never reflexively to T2.
+Install them individually — none depends on another. `compound-v`, `silver` and
+`workflow-investigation` are pulled **live from their own repos** rather than copied in here, so
+they cannot go stale behind upstream.
 
-## Parallel agents in git worktrees — you stay on `main`, work auto-branches
+> **bad-research engine — one-time caveat.** Its skills and agents load instantly with zero setup.
+> The deep-research **engine** is a small Python CLI (`bad`) that the plugin self-bootstraps into
+> its own data dir on first use — you run no commands. It wants **Python 3.11–3.13** and ideally
+> [`uv`](https://docs.astral.sh/uv/) or `pipx`. Without that toolchain it degrades to native web
+> search; nothing else breaks. No ML stack is downloaded.
 
-- **Always start from `main`.** For a feature, the pipeline auto-creates an independent feature branch in its own git worktree and works there — `main` stays clean the whole time. You never `git checkout`, never manually branch.
-- **≥2 independent sub-tasks ⇒ parallelize.** One `Agent(isolation:"worktree")` per task — its own worktree+branch; auto-cleans if unchanged.
-- **Merge inward; touch `main` only at ship.** Sub-task branches merge into the feature branch (disjoint-file partition = conflict-free); the feature branch lands on `main` only at the deliberate ship step. `main` is never half-built.
-- **Cleanup is part of the task** — after merge, `git worktree remove` + delete the branch. 4–8 concurrent cap.
+## Tier routing — a document only when it earns its keep
 
-## What's in here
+| Tier | Trigger | Pipeline | New docs |
+|---|---|---|---|
+| **T0** | Bug fix · refactor with no behavior change · docs · dep bump · devops/CI config. Two-way door, obvious solution. | Build it: test-first + review. | **0** |
+| **T1** | Small feature · single subsystem · mostly reversible · under ~8 files. | Spec and plan **in the conversation** → one grill pass → confirmed plan → build → verify. The record is the commit message. | **0** |
+| **T2** | New pipeline or behavior · new DB table/column · new public API or data source · cross-cutting · **one-way door** · anything moving user-visible outcomes. | One change file → consistency gate → adversarial grill → architecture lock-in → **editable plan-gate** → parallel worktree build → verify → ship. | **1** |
+
+Unsure → route up. Never reflexively to T2.
+
+## Working with the docs that already exist
+
+Before writing anything, the pipeline inventories the repo's documentation — product intent,
+ADRs, change records, runbooks, API/CLI/config reference — and picks exactly one route:
+
+- **amend** the document that already owns this surface (the default),
+- **supersede** the ADR this change reverses,
+- **create** one change file, or
+- **none** at all.
+
+Then it names every doc the change will make *wrong* and turns each into a plan task. A change that
+invalidates documentation has not shipped until that documentation is updated. The rationale, with
+sources, is in
+[`plugins/prd-pipeline/skills/prd-pipeline/references/research-notes.md`](plugins/prd-pipeline/skills/prd-pipeline/references/research-notes.md) §8.
+
+## Parallel agents in git worktrees — you stay on `main`
+
+- **Always start from `main`.** A feature auto-creates its own branch in its own worktree; `main` stays clean the whole time. You never `git checkout`, never manually branch.
+- **Two or more disjoint-file tasks ⇒ parallelize.** One `Agent(isolation:"worktree")` per task — its own worktree and branch, auto-cleaned if unchanged.
+- **Merge inward; touch `main` only at ship.** Sub-task branches merge into the feature branch; the feature branch lands on `main` only at the deliberate ship step, so `main` is never half-built.
+- **Cleanup is part of the task**, on success and on failure. Ceiling 4–8 concurrent worktrees — past that you are bottlenecked on review, not on the model.
+
+## Layout
 
 ```
-.claude-plugin/marketplace.json     the marketplace catalog (lists the 3 plugins)
+.claude-plugin/marketplace.json     the catalog
 plugins/
-  prd-pipeline/                     the orchestrator plugin
-    .claude-plugin/plugin.json        manifest — declares deps on compound-v + bad-research
+  prd-pipeline/                     the pipeline plugin (standalone)
     skills/prd-pipeline/SKILL.md      the procedure
-    skills/prd-pipeline/references/   cited best-practice synthesis + default spec template
-    hooks/                            SessionStart router (re-homes the always-on trigger)
-  compound-v/                       vendored compound-v plugin (the composed skill set)
-  bad-research/                     vendored bad-research
-    skills/ agents/                   prompt layer (loads instantly, no Python)
-    engine/                           the Python deep-research engine (self-bootstrapped on first use)
-    bin/bad                           launcher that builds the engine venv on first call
+    skills/prd-pipeline/references/   sourced rationale + the one change template
+  bad-research/                     vendored deep-research plugin (skills + agents + Python engine)
+  superdesign/                      vendored UI design plugin
+tests/smoke.sh                      legacy-installer smoke test
+tests/bundle-consistency.sh         structural checks on the marketplace itself
 bin/prd · install.sh                LEGACY non-plugin installer (see below)
-rules/feature-workflow.md           legacy always-on rule (used only by bin/prd)
+rules/feature-workflow.md           the condensed rule the legacy installer wires into CLAUDE.md
 ```
 
-## Legacy install (without `/plugins`)
+## Legacy install (without `/plugin`)
 
-For environments that don't use Claude Code plugins, the original script installer still works — it copies the prd-pipeline skill + rule into `~/.claude` and wires a managed `CLAUDE.md` block. It does **not** bundle compound-v or bad-research; prefer the `/plugins` path above.
+For environments with no plugin support, the script installer still works — it copies the
+prd-pipeline skill and rule into `~/.claude` and wires a clearly-marked managed `CLAUDE.md` block.
+It installs only prd-pipeline; prefer the `/plugin` path above.
 
 ```bash
 git clone https://github.com/Timmy-Lane/prd-pipeline ~/.prd-pipeline
@@ -75,16 +106,22 @@ less ~/.prd-pipeline/bin/prd ~/.prd-pipeline/install.sh   # inspect before runni
 ~/.prd-pipeline/bin/prd install
 ```
 
-`prd doctor` reports install status + a dependency check (`git`, `compound-v`, the research engine). Other subcommands: `prd update[ --check]`, `prd uninstall`, `prd new <topic>`, `prd list`, `prd audit`, `prd notify on|off|status`.
+`prd doctor` reports install status and checks `git` (the only hard dependency). Other subcommands:
+`prd update[ --check]`, `prd uninstall`, `prd new <topic>`, `prd list`, `prd audit`,
+`prd notify on|off|status`.
 
 ## Security / trust
 
-- The `/plugins` install copies plugins into Claude Code's plugin cache; nothing phones home. The bad-research engine, when first used, builds a local Python venv from the **vendored** engine source in this repo (it does fetch that engine's own PyPI dependencies at that point — the keyless base, no ML stack).
-- The legacy `bin/prd` only writes under `~/.claude` + `~/.local/bin`, edits a clearly-marked managed `CLAUDE.md` block (atomic, truncation-safe), never uses `eval`, and makes no network calls unless you opt into `prd notify on` (a read-only `git ls-remote` against this repo, ≤1/day, cached).
+- `/plugin` copies plugins into Claude Code's cache; nothing phones home. The bad-research engine, on first use, builds a local Python venv from the **vendored** engine source here (that step does fetch the engine's own PyPI dependencies — the keyless base, no ML stack).
+- `bin/prd` writes only under `~/.claude` and `~/.local/bin`, edits an atomic truncation-safe managed `CLAUDE.md` block, never uses `eval`, and makes no network call unless you opt into `prd notify on` (a read-only `git ls-remote` against this repo, at most once a day, cached).
 
 ## Credit
 
-Process canon distilled from Google's *Design Docs*, Amazon's *Working Backwards* PR-FAQ, the Rust RFC + Oxide RFD lineage, Basecamp's *Shape Up*, Gary Klein's pre-mortem, and spec-driven-development tools (GitHub spec-kit, OpenSpec, BMAD). Sources in `plugins/prd-pipeline/skills/prd-pipeline/references/research-notes.md`. Bundles **compound-v** (© Slava / LeventySeven, MIT) and **bad-research** (© LeventySeven, MIT); each plugin keeps its upstream license.
+Process canon distilled from Google's *Design Docs*, Amazon's *Working Backwards* PR-FAQ, the Rust
+RFC and Oxide RFD lineage, Basecamp's *Shape Up*, Gary Klein's pre-mortem, and the spec-driven
+tools — GitHub spec-kit, OpenSpec, BMAD — plus Diátaxis for how documentation divides. Sources in
+`plugins/prd-pipeline/skills/prd-pipeline/references/research-notes.md`. Bundles **bad-research**
+(© LeventySeven, MIT); each plugin keeps its upstream license.
 
 ## License
 

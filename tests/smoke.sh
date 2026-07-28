@@ -352,10 +352,15 @@ printf '\n\033[1m[11] prd update --check\033[0m\n'
 
 CLONE_VER="$(tr -d '[:space:]' < "$REPO/VERSION")"   # e.g. 0.2.0
 
+# Derive the fixtures from the CURRENT version — a hardcoded "newer" tag silently
+# becomes an older one the first time VERSION crosses it (v0.10.0 was newer than
+# 0.5.2 and older than 1.0.0), which fails the suite for no real reason.
+NEWER_VER="$(( ${CLONE_VER%%.*} + 1 )).0.0"
+
 # Newer tag available → "update available"
-FAKE="$TMPROOT/tags-newer"; printf 'v0.2.0\nv0.10.0\nv0.9.0\n' > "$FAKE"
+FAKE="$TMPROOT/tags-newer"; printf 'v0.2.0\nv%s\nv0.9.0\n' "$NEWER_VER" > "$FAKE"
 OUT="$(PRD_LSREMOTE_TAGS_FILE="$FAKE" prd update --check 2>&1)"
-case "$OUT" in *"update available"*"0.10.0"*) pass "C11: detects newer release" ;; *) fail "C11: did not detect newer release ($OUT)" ;; esac
+case "$OUT" in *"update available"*"$NEWER_VER"*) pass "C11: detects newer release" ;; *) fail "C11: did not detect newer release ($OUT)" ;; esac
 
 # Only equal/older tags → "up to date"
 FAKE2="$TMPROOT/tags-same"; printf 'v0.0.9\nv%s\n' "$CLONE_VER" > "$FAKE2"
@@ -522,13 +527,17 @@ fi
 printf '\n\033[1m[18] prd audit\033[0m\n'
 
 C18="$TMPROOT/c18-repo"; mkdir -p "$C18/docs/specs"
-printf '%b' '---\nid: 0001\ntitle: clean\nstatus: accepted\ncreated: 2026-06-01\n---\n' > "$C18/docs/specs/0001-clean.md"
+# Dated TODAY on purpose. A hardcoded date makes the fixture age into the audit's
+# own "accepted and > 30 days old" staleness warning, so the suite starts failing
+# on a calendar boundary rather than on a code change.
+TODAY18="$(date +%Y-%m-%d)"
+printf '%b' "---\nid: 0001\ntitle: clean\nstatus: accepted\ncreated: $TODAY18\n---\n" > "$C18/docs/specs/0001-clean.md"
 A18="$( cd "$C18" && bash "$REPO/bin/prd" audit 2>&1 )" && AR18=0 || AR18=$?
 assert_eq "C18: clean repo exits 0" 0 "$AR18"
 case "$A18" in *ok*) pass "C18: clean repo reports ok" ;; *) fail "C18: clean not ok ($A18)" ;; esac
 # now seed problems: superseded w/o link, and id≠filename
-printf '%b' '---\nid: 0002\ntitle: orphan\nstatus: superseded\ncreated: 2026-06-01\nsupersedes:\n---\n'  > "$C18/docs/specs/0002-orphan.md"
-printf '%b' '---\nid: 0099\ntitle: mism\nstatus: draft\ncreated: 2026-06-01\n---\n'                      > "$C18/docs/specs/0003-mism.md"
+printf '%b' "---\nid: 0002\ntitle: orphan\nstatus: superseded\ncreated: $TODAY18\nsupersedes:\n---\n"  > "$C18/docs/specs/0002-orphan.md"
+printf '%b' "---\nid: 0099\ntitle: mism\nstatus: draft\ncreated: $TODAY18\n---\n"                      > "$C18/docs/specs/0003-mism.md"
 D18="$( cd "$C18" && bash "$REPO/bin/prd" audit 2>&1 )" && DR18=0 || DR18=$?
 assert_eq "C18: dirty repo exits 1" 1 "$DR18"
 case "$D18" in *supersedes*) pass "C18: flags superseded-without-link" ;; *) fail "C18: missed superseded link ($D18)" ;; esac

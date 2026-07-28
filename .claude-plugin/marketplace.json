@@ -1,23 +1,56 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "prd-pipeline",
-  "description": "The Compound V build stack: a lean agentic-AI skill set with a tier-adaptive PRD->plan->parallel-worktree-build pipeline, bundled with the Bad Research deep-research engine.",
+  "description": "One marketplace for the whole stack: the tier-adaptive prd-pipeline build path, the Compound V skill set, the Bad Research deep-research engine, the silver keyless browser, workflow-investigation's primary-source sweep, and superdesign. Each plugin stands alone; install only what you want.",
   "owner": {
     "name": "Timmy-Lane",
     "url": "https://github.com/Timmy-Lane/prd-pipeline"
   },
   "plugins": [
     {
-      "name": "compound-v",
-      "source": "./plugins/compound-v",
+      "name": "prd-pipeline",
+      "source": "./plugins/prd-pipeline",
       "category": "workflow",
-      "description": "Lean skill set for shipping software with agentic AI: product & startup taste, context engineering, security-first review, TDD, and the tier-adaptive prd-pipeline build path (spec/PRD -> grill -> confirmed plan-gate -> parallel worktree build -> verify -> ship)."
+      "description": "Build pipeline: idea -> the smallest spec that earns its keep -> adversarial grill -> confirmed plan-gate -> parallel git-worktree build -> verified ship. Tier-adaptive, so a trivial fix writes no document and a one-way door gets the full treatment. Routes every change against the docs that already exist (amend / supersede / create) instead of writing a new PRD by reflex, and budgets at most one new document per change. Standalone — needs no other plugin."
+    },
+    {
+      "name": "compound-v",
+      "source": {
+        "source": "git",
+        "url": "https://github.com/LeventySeven/compound-v.git"
+      },
+      "category": "workflow",
+      "description": "The judgment around the code, as ~28 short skills behind one router: startup / product / distribution taste, brainstorming and plans, TDD, systematic debugging, verification before completion, read-only review, agent security (the lethal trifecta), evals, context engineering, and AI-system architecture. Pulled live from upstream, never vendored, so it cannot go stale here."
     },
     {
       "name": "bad-research",
       "source": "./plugins/bad-research",
       "category": "research",
-      "description": "Deep, multi-source, fully-cited research engine (tier-adaptive, adversarially reviewed). Vendored real engine: prompt skills + 16 agents load instantly; the Python `bad` CLI self-bootstraps on first use (needs Python 3.11-3.13 + uv/pipx)."
+      "description": "Deep, multi-source, fully-cited research. Tier-adaptive: a bounded question gets a fast cited answer; a broad or contested one gets the full adversarially-reviewed report with every claim bound to a source. Prompt skills + 16 agents load instantly; the Python `bad` engine self-bootstraps on first use (needs Python 3.11-3.13 and uv or pipx)."
+    },
+    {
+      "name": "silver",
+      "source": {
+        "source": "git",
+        "url": "https://github.com/LeventySeven/silver.git"
+      },
+      "category": "web",
+      "description": "A keyless local headless browser for AI agents (Playwright; never calls a model or an API). Drives live pages through accessibility-tree snapshots with stable @eN refs: open, click, fill, log in, extract a table to JSON with real links, monitor for change, QA-drive an app, or run a durable multi-step job that survives a crashed agent. Ships the skill and the /quick, /extract, /parallel, /task commands; needs the `silver` CLI on PATH (npm i -g agent-silver)."
+    },
+    {
+      "name": "workflow-investigation",
+      "source": {
+        "source": "git",
+        "url": "https://github.com/LeventySeven/workflow-investigation.git"
+      },
+      "category": "research",
+      "description": "Ground research, design, architecture, or any load-bearing decision in RAW PRIMARY SOURCES before acting. Fans out parallel agents that each READ the actual essay, talk, repo, paper, teardown, or code and return findings carrying their evidence — a verbatim quote plus an exact location — never a lossy digest and never bare pointers. Scales from a QUICK per-source sweep to a DEEP fan-out of 4+ agents per source plus an adversarial pass."
+    },
+    {
+      "name": "superdesign",
+      "source": "./plugins/superdesign",
+      "category": "design",
+      "description": "Design and build brand-specific UI with React + Tailwind v4 + shadcn/ui through a system-first workflow: brand -> OKLCH tokens -> a vetted pattern cookbook -> polish -> anti-slop and accessibility gates. Use for any UI work, or whenever an interface looks generic and needs to look deliberately designed."
     }
   ]
 }

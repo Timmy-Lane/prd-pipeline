@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "prd-pipeline",
+  "displayName": "PRD Pipeline",
+  "version": "1.0.0",
+  "description": "Tier-adaptive build pipeline: idea -> the smallest spec that earns its keep -> adversarial grill -> confirmed plan-gate -> parallel git-worktree build -> verified ship. Routes every change against the docs that already exist instead of writing a new PRD, and budgets at most one new document per change. Standalone: no other plugin required.",
+  "author": {
+    "name": "Timmy-Lane",
+    "url": "https://github.com/Timmy-Lane"
+  },
+  "homepage": "https://github.com/Timmy-Lane/prd-pipeline",
+  "repository": "https://github.com/Timmy-Lane/prd-pipeline",
+  "license": "MIT",
+  "keywords": [
+    "prd",
+    "spec-driven-development",
+    "planning",
+    "git-worktree",
+    "parallel-agents",
+    "verification",
+    "documentation"
+  ]
+}

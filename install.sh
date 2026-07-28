@@ -22,7 +22,7 @@ esac
 SELF="${BASH_SOURCE[0]:-}"
 if [ -n "$SELF" ] && [ -f "$SELF" ]; then
   HERE="$(cd "$(dirname "$SELF")" && pwd)"
-  if [ -f "$HERE/skills/prd-pipeline/SKILL.md" ]; then
+  if [ -f "$HERE/plugins/prd-pipeline/skills/prd-pipeline/SKILL.md" ]; then
     exec "$HERE/bin/prd" install
   fi
 fi
