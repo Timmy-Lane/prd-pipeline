@@ -218,8 +218,9 @@ Only when rungs 0–3 leave a mechanic blank.
   Fetch the index server-side — Storybook 10 has a known CORS bug that blocks it from a browser
   page. Look first for `title` values containing `Color`, `Typography`, `Tokens` or `Foundations`:
   those docs pages are usually the design system's own token table, already rendered as HTML.
-- **Source maps** — `curl -sI <chunk>.js.map`; a served map returns the design system under its
-  original filenames.
+- **Source maps** — `curl -s <chunk>.js.map | head -c 200`; a served map *can* return the design
+  system under its original filenames. **Gate on the `sources` array, not on the 200** — Framer
+  serves maps that are 74-byte stubs with `sources` empty, which reads as a hit and yields nothing.
 - **Wayback** — `https://web.archive.org/cdx/search/cdx?url=<domain>&output=json&collapse=digest`
   recovers a design the site has since replaced, which is how you tell a considered system from
   last quarter's redesign.
@@ -295,7 +296,7 @@ its screenshots. Container widths and the type ramp converge across pages; the a
 | **the accent** | three falling tiers: a **repeated CTA fill** (≥2 solid, non-monochrome button backgrounds at α≥0.7), then the **highest brand-intent** color, then highest chroma | the card states which tier fired. "highest chroma (weakest evidence)" means treat the accent as a guess |
 | **brand intent** | a context score per element from its class/id/`data-*`/tag — `logo`/`brand` 5, `primary`/`cta` 4, `hero`/`button` 3, weak keywords liftable from up to 4 ancestors | a site with hashed CSS-in-JS class names scores everything 1 and the tier falls through |
 | **type** | loaded `FontFace` entries, `@font-face` families from CSS, and the size/weight/line-height/tracking ramp ranked by characters rendered | a face still loading means the ramp names a fallback — the card says so in the header |
-| **spacing / grid** | histogram of every padding/gap, weighted by use count; base unit = the largest of 8/6/5/4/3/2 that ≥80% of uses land on | — |
+| **spacing / grid** | histogram of every padding/gap, weighted by use count; base unit = the largest of 8/6/5/4/3/2 that ≥80% of uses land on | it recovers the **rendered** grid, never the **authored** scale. Framer's own registry declares base unit `10` and spacing `[0,2,3,4,5,8,10,15,20]`; measuring a page built from its component CSS returns `base unit 2px (81%) · off the 4px grid` — true of the pixels, false of the system. `10` is not in the candidate list, so a decimal system cannot be named even when it dominates |
 | **radius** | histogram, with `pill/circle` split out from numeric steps so one pill family cannot claim to be the base | — |
 | **elevation** | distinct `box-shadow` recipes with counts; zero recipes = border-first | — |
 | **motion** | transition durations, curves, and animated properties, read **before** the animation freeze; median reported over UI transitions ≤1s so ambient loops do not skew it | — |
@@ -316,10 +317,16 @@ Two mechanics of the run are worth knowing because they change the numbers:
 
 The card is numbers. These are how the numbers become a judgement.
 
-0. **The mode is the scale; the tail is drift.** Every histogram on the card is read this way. The
-   most-used radius *is* the reference's radius token; the eight one-off values below it are that
-   team's own drift, not a nine-step scale. This is why the card prints counts next to every value
-   and why you must never read a histogram as a token set.
+0. **The mode is the scale; the tail is mixed.** Every histogram on the card is read this way. The
+   most-used radius *is* the reference's radius token — but the one-off values below it are **not
+   reliably that team's drift**, and no histogram separates the two. Measured 2026-07-29 against the
+   one reference whose authored scale is knowable: a page built from Framer's own component CSS
+   reports radii `8×3656 · pill×528 · 5×40 · 10×40 · 13×40 · 2×16 · 11×8 · 6×8`, while Framer's
+   recovered registry declares its radius scale as `[2, 4, 5, 8, 10, 12, 13, 15, 16, 18]`. So `5`,
+   `10` and `13` are authored steps and `11` and `6` are drift — adjacent in the same tail, at
+   comparable counts, indistinguishable by shape. Read the mode as the token, treat the tail as
+   unresolved until an authored source (rung 0, 3 or 4) settles it, and never read a histogram as a
+   token set.
 1. **The three-surface test.** A real product system has **≥3 near-neutral surfaces separated by
    ~3–5 L%** at essentially constant hue. Linear reads `13.9% / 17.2% / 18.6%` at C 0.003, H 246–248.
    If your mined surfaces do not form that ladder, you captured a marketing page, not the product —
