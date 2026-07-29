@@ -14,6 +14,20 @@ npx shadcn@latest add command dialog
 npm i lucide-react
 ```
 
+## Contents
+
+- [When to use it](#when-to-use-it) — when a palette earns its place, and what to ship instead
+- [Anatomy](#anatomy) — `CommandDialog` → `cmdk` root → input, list, groups, items
+- [Token-driven styling](#token-driven-styling) — the CSS-variable layer the palette consumes
+- [Variants](#variants) — universal launcher (ship this) · nested pages
+- [Interaction & state matrix](#interaction--state-matrix) — every state, including loading, empty, and error on real data
+- [Responsive behavior](#responsive-behavior) — centered dialog on desktop; the mandatory visible trigger on mobile
+- [Accessibility](#accessibility) — what Radix and cmdk give you free, and what they don't
+- [Anti-slop callout](#anti-slop-callout) — the states and details that separate Linear-grade from filler
+- [Complete example](#complete-example) — `command.tsx`, the production component, and where to mount it
+- [Notes & extensions](#notes--extensions) — context awareness, ranking as a score not a boolean
+- [Corpus grounding — command palette (2026-07-05 research)](#corpus-grounding--command-palette-2026-07-05-research) — copyable rules, token/motion defaults, slop failures
+
 ---
 
 ## When to use it
@@ -37,9 +51,9 @@ CommandDialog                     ← Radix Dialog: overlay, focus trap, scroll 
 └── Command                       ← cmdk root: owns query, filtering, ranking, selection
     ├── (header / breadcrumb)     ← optional: current "page" when nested
     ├── CommandInput              ← search field, auto-focused, leading search icon
+    ├── (loading bar)             ← a thin bar UNDER the input — never a spinner in the list
     └── CommandList               ← scroll container, max-h ~300–400px
-        ├── CommandLoading        ← async spinner/skeleton (optional)
-        ├── CommandEmpty          ← "No results found." — renders automatically at 0 matches
+        ├── CommandEmpty          ← "No results found." — gated on status, not on count alone
         ├── CommandGroup "Recent" ← grouped results under a muted heading
         │   ├── CommandItem       ← [leading icon] label [trailing CommandShortcut]
         │   └── CommandItem
@@ -77,7 +91,7 @@ your `globals.css` under Tailwind v4's `@theme inline`:
 }
 
 :root {
-  --radius: 0.625rem;
+  --radius: 0.5rem;   /* 8px — required brand-step output, never a default (→ tokens.md §6) */
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
   --accent: oklch(0.97 0 0);
@@ -141,8 +155,8 @@ Design **all** of these, not just the happy path — this is where cheap palette
 | **Closed** | default | Visible trigger only (search-styled button + `⌘K` kbd hint). |
 | **Open / idle** | ⌘K, empty query | Default suggestions + **Recent** group; input focused; **first item pre-selected**. |
 | **Typing / filtering** | user types | Live-ranked results; keep first result selected; empty groups auto-hide. |
-| **No results** | query matches nothing | `CommandEmpty`: "No results found." Optionally a fallback row ("Search the web for _X_"). |
-| **Loading (async)** | fetching | `CommandLoading` spinner; **keep already-loaded rows visible** — don't flash to blank. |
+| **No results** | query matches nothing **and** nothing is in flight | `CommandEmpty`: "No results found." Optionally a fallback row ("Search the web for _X_"). Gate it on `status !== "loading"`, **not on result count alone** — Raycast's rule is that the empty view "is *never* displayed if the `List`'s `isLoading` property is true and the search bar is empty". |
+| **Loading (async)** | fetching | A thin **bar under the search input** — Raycast's `isLoading` "indicates whether a loading bar should be shown or hidden below the search bar." **Keep already-loaded rows visible**; never a spinner in the list, never a flash to blank. |
 | **Error** | async failed | Inline error row **with a Retry action** — never a blank list, never a silent failure. |
 | **Item hover / kbd-selected** | pointer or ↑↓ | Single `[data-selected]` highlight. Pointer and keyboard must not fight (see anti-slop). |
 | **Item disabled** | unavailable action | `[data-disabled]`, dimmed, skipped by arrow keys. |
@@ -152,6 +166,16 @@ Design **all** of these, not just the happy path — this is where cheap palette
 **Keyboard contract:** `⌘K`/`Ctrl+K` toggle open (same key opens *and* closes) · type immediately
 (no click needed) · `↑`/`↓` navigate with `loop` wrap · `↵` run selected · `Esc` close (or pop a
 page) · `Backspace` on empty query pops a nested page.
+
+**Open/close at 0ms — the palette does not animate.** A ⌘K surface is a keyboard-initiated,
+100+×/day action, and **keyboard-initiated actions never animate** (canonical rule → motion.md §1).
+Raycast and Vercel's ⌘K ship with *zero* open/close transition on purpose — an entrance the user
+pays for on every one of hundreds of daily opens is pure friction, not polish. The shadcn
+`CommandDialog` inherits Radix's default 200ms fade+`zoom-in-95`; **strip it** so the panel appears
+instantly (override in the primitive below). The selected-row highlight is likewise an instant
+(`0ms`) `data-[selected]` token swap — no transition — so the highlight keeps pace with fast arrow
+nav. If you keep *any* motion here at all, it's an opacity-only fade with a **<100ms** ceiling and
+never a scale/blur; but instant is correct.
 
 ---
 
@@ -274,7 +298,16 @@ function CommandDialog({
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
       <DialogContent
-        className={cn("overflow-hidden p-0", className)}
+        // Keyboard-initiated 100+×/day surface → NO enter/exit animation
+        // (motion.md §1). Neutralize Radix's default fade+zoom so the palette
+        // appears instantly; keep the overlay's opacity fade only.
+        className={cn(
+          "overflow-hidden p-0",
+          "data-[state=open]:animate-none data-[state=closed]:animate-none",
+          "data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100",
+          "duration-0",
+          className
+        )}
         showCloseButton={showCloseButton}
       >
         <Command
@@ -962,11 +995,112 @@ export function Header() {
 
 - **Context awareness:** pass the current route/entity into `CommandMenuProvider` and prepend a
   "On this page" group whose actions pre-target the current object ("Assign _this issue_ to…").
-- **Ranking:** cmdk sorts by match score by default. For custom importance/recency weighting, set
+- **Ranking:** `filter` is a **score, not a boolean**. cmdk's signature is
+  `filter(value, search, keywords)` returning a number where `0` means no match, and "Keywords act
+  as aliases for the item value, and **can also affect the rank of the item**"
+  ([cmdk](https://github.com/pacocoursey/cmdk)). For custom importance/recency weighting, set
   `shouldFilter={false}` on `<Command>` and supply pre-sorted, pre-filtered items yourself (this is
   also how you drive fully server-side search).
-- **Scale:** cmdk is comfortable to ~2–3k items. Beyond that, set `shouldFilter={false}` and
-  virtualize the list (e.g. `@tanstack/react-virtual`).
-- **Aliases:** the `keywords` prop is your synonym layer — invest in it; it's the difference between
-  "typo-tolerant magic" and "why can't it find anything".
-```
+- **Scale ceiling:** cmdk gives **"Good performance up to 2,000-3,000 items"** without
+  virtualization (same source). Past that, `shouldFilter={false}` + your own virtualized list
+  (e.g. `@tanstack/react-virtual`).
+- **Aliases:** because keywords feed the *rank*, the `keywords` prop is not just a synonym list —
+  it is a ranking input. Invest in it; it's the difference between "typo-tolerant magic" and "why
+  can't it find anything".
+- **Row anatomy, from Raycast's own API:** `title` (required) · `subtitle` · `icon` ·
+  `accessories` ("[a]n optional array of List.Item.Accessory items displayed on the right side")
+  · `keywords` ("additional indexable strings for search")
+  ([Raycast List](https://developers.raycast.com/api-reference/user-interface/list)). And their
+  detail-view rule: "when shown, it is recommended not to show any accessories on the
+  `List.Item` and instead bring those additional information in the `List.Item.Detail` view."
+  **One accessory slot, right-aligned** — not metadata crammed into the title.
+- **Tooltip skip-delay on the surrounding toolbar (not the palette itself).** The palette has no
+  hover delay to tune, but the icon actions *around* it (the header toolbar the ⌘K trigger sits in)
+  should share one `TooltipProvider` with `delayDuration={700} skipDelayDuration={300}`: the first
+  tooltip waits (guards against accidental activation), but once one is open, adjacent tooltips open
+  **instantly with no animation** while you sweep the toolbar — which makes the whole bar feel faster
+  (canonical rule → motion.md §6). Per-tooltip delays and per-tooltip fades are the slow, generated
+  default.
+
+---
+
+## Corpus grounding — command palette (2026-07-05 research)
+
+Sourced from `docs/research/notes/product-app-ui-patterns.md` → **## Command menus (Cmd-K palettes)**.
+This section grounds the recipe above with copyable rules + concrete values from the corpus, and
+carries its source flags forward. The recipe's guidance stands; this is additive. Primary sources
+behind these values: **shadcn/ui `command.tsx` / `dialog.tsx` + cmdk + Raycast/Superhuman/VS Code
+docs + Emil Kowalski's motion writing**. The through-line: *dense ~32px rows, forgiving fuzzy match,
+instant highlight, inline shortcut hints, and **minimal-to-zero entrance animation**.*
+
+> **Provenance rule.** Flagship products publish *philosophy*; libraries, design systems,
+> browser vendors and W3C publish *numbers*. Never attribute a px or ms value to Linear,
+> Superhuman, Figma or Arc unless the value appears in their own page text. Specifically:
+> `linear.app/blog/scaling-the-linear-sync-engine` is a **video wrapper** — cite it for the
+> *architecture* (local store, optimistic mutation, background sync) and never for a number.
+> The `G`+letter navigation map is **third-party-observed**, not from Linear's docs.
+
+### Copyable rules (with values)
+
+- **One global toggle — `⌘K` / `Ctrl+K` — and the *same key closes it*.** `⌘⇧P` is an optional alt.
+  Don't fragment across ⌘K/⌘P/⌘/. *Sources:* Superhuman blog, VS Code (primary). ⚠️ **Stripe diverges**
+  (`/`=search, `?`=shortcuts). ⚠️ **Figma:** `⌘K` was **reassigned to the Figma Make AI prompt bar in
+  2026** — cite **`⌘/` (Quick Actions) as the durable binding**; treat `⌘K`-for-Actions as stale.
+- **Snapshot the previously-focused element on open; restore it on dismiss** so `Esc` never strands
+  editing context. When you open via the global shortcut (not a focusable trigger), stash
+  `document.activeElement` yourself and restore it. *Sources:* Superhuman blog, cmdk (primary).
+- **Enter fires exactly ONE implicit primary action** (no panel); **`⌘K` opens the full action panel**
+  on the focused row. Action tiers: primary `↵`, secondary `⌘↵`, tertiary `⌘⇧↵`. In forms the primary
+  is `⌘↵` (Enter reserved for text fields). *Source:* Raycast action-panel (primary).
+- **Inline, right-aligned shortcut hint per row** — a real accessory slot, not inline text and not a
+  footer legend — so mouse users learn shortcuts passively. shadcn `<CommandShortcut>`:
+  `ml-auto text-xs tracking-widest`. *Sources:* Raycast, shadcn command.tsx (primary).
+- **Forgiving fuzzy match with a *scored threshold*, run against a HIDDEN `keywords`/alias field kept
+  separate from the visible label.** cmdk exposes `filter(value, search, keywords) => number`.
+  Superhuman ships `command-score > 0.0015`. *Sources:* Superhuman blog, cmdk (primary). ⚠️ The **0.0015
+  threshold is one implementation's tuned value, not a universal default** — tune your own.
+- **Titled groups; keep filtered-out groups MOUNTED via the `hidden` attribute, do not unmount them.**
+  cmdk comfortably handles ~2000–3000 items without virtualization. *Source:* cmdk (primary).
+- **Loading = a thin bar under the search input**, and **suppress the empty state while an empty query
+  is loading** (no false "no results" flash while streaming). *Source:* Raycast list (primary).
+- **Empty state = a plain centered text row** ("No results found."), *not* an illustration. shadcn
+  `CommandEmpty`: `py-6 text-center text-sm`. *Sources:* shadcn command, Raycast (primary).
+- **MINIMAL-TO-ZERO entrance animation.** ⚠️ **Corpus CORRECTION:** Emil Kowalski's *Great Animations*
+  praises **Raycast for shipping NO open/close animation** on its palette — the earlier
+  "~500ms Raycast enter" claim was **fabricated/inverted**. If you must animate, shadcn `CommandDialog`
+  uses **200ms fade + zoom 95→100% ease-out**, overlay **`bg-black/50` opacity-only** (no blur, no
+  scale), ceiling **<300ms**. *Sources:* emilkowal.ski, shadcn dialog.tsx (primary).
+- **Selected row = INSTANT (0ms) background+foreground token swap on a data-attribute — no border, no
+  shadow, no transition** — so the highlight keeps pace with fast arrow nav.
+  `data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground`; disabled
+  `data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50`; panel rides
+  `bg-popover` / `text-popover-foreground`. *Source:* shadcn command.tsx (primary).
+- **Fixed small rows (~32px), not auto-sizing:** item `px-2 py-1.5 text-sm rounded-sm`; list
+  `max-h-[300px] overflow-y-auto` (`p-1`); dialog input `h-10` inside an `h-12` wrapper; icons
+  `size-4` (16px), `size-5` in the dialog input row. *Source:* shadcn command.tsx (primary).
+- **Nested "pages" push a stack:** Backspace on empty input pops one level, `Esc` pops/closes (exit the
+  sub-view first, then the dialog). *Sources:* cmdk, Raycast (primary).
+- **Persist an MRU / recent list surfaced from the empty-query state.** VS Code cycles history with
+  `↑/↓`. ⚠️ Sourced **partly to a course site (stevekinney.com)** — secondary; prefer VS Code's own
+  docs.
+
+### Token / motion defaults (corpus ⌘K block)
+
+- **open/close:** 200ms fade + zoom 95→100% ease-out — **or 0ms, Raycast-style, on this high-frequency surface (preferred)**
+- **overlay:** `bg-black/50`, opacity-only, `z-50`
+- **selected-row transition:** `0ms` (instant attribute color swap)
+- **rows:** ~32px (`px-2 py-1.5 text-sm rounded-sm`); list `max-h-[300px] p-1`; input `h-10` in `h-12` wrapper
+- **icons:** `size-4` / `size-5 shrink-0`; separator `h-px`, visible only when the query is empty
+- **surface:** `bg-popover` / `text-popover-foreground`, `rounded-md`
+- **latency:** target **<100ms** end-to-end. ⚠️ Superhuman's **"50–60ms internal target" traces to a
+  single dated blog post** — cite as **reconstructed**, not a verified current cross-product benchmark.
+
+### AI-slop failures (don't ship these)
+
+Tall airy 56px+ rows with big icons · **any decorative entrance animation on a `⌘K` surface** ·
+**animating the selected-row highlight** · exact-substring-only filtering with no alias field ·
+metadata crammed into the title string · full-list spinner/skeleton or a false "no results" while
+streaming · no inline shortcut hints · Enter opening a menu instead of firing the primary action ·
+`Esc` nuking the whole palette from a nested page · one overloaded box for search+find+insert ·
+illustrated oversized empty state · hard-coded white/black instead of `popover`/`accent` tokens ·
+unmounting filtered items.

@@ -2,6 +2,18 @@
 
 > One self-contained surface that groups a single concept and drives (ideally) one action. Built on the shadcn/ui `Card` skeleton with React + Tailwind v4. The kind Linear/Vercel ships: flat with a hairline border (not floaty shadows), one accent color, `tabular-nums` metrics that never jitter, layered-lightness elevation in dark mode, and accessible clickable surfaces via the stretched-link trick.
 
+## Contents
+
+- [When to use it](#when-to-use-it) — the three card families, and when a card is the wrong container
+- [Anatomy](#anatomy) — the shadcn `Card` skeleton every variant extends
+- [Token-driven styling](#token-driven-styling) — the token layer plus the two semantic additions
+- [Variants](#variants) — stat/KPI card with trend + sparkline · whole-surface-clickable product card
+- [Interaction / state matrix](#interaction--state-matrix) — every state a card must define
+- [Responsive behavior](#responsive-behavior) — single-column first, equal tile heights per row
+- [Accessibility](#accessibility) — the stretched-link trick for clickable cards
+- [Anti-slop callout](#anti-slop-callout) — value jitter, jagged heights, and the rest
+- [Complete code](#complete-code) — drop-in `StatCard`, the clickable product card, implementation notes
+
 ---
 
 ## When to use it

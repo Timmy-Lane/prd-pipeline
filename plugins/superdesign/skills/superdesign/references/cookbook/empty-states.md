@@ -11,6 +11,22 @@ lives in most of the time during the first second of every visit, and on every
 slow network forever. Treat them as one designed system: a small state machine
 that a data-backed surface resolves into exactly one of.
 
+## Contents
+
+- [1. When to use it](#1-when-to-use-it) — any surface rendering remote or derived data
+- [2. The state matrix](#2-the-state-matrix) — the states per scope, enumerated up front rather than discovered in production
+- [3. Anatomy](#3-anatomy) — one outer wrapper, three sets of children, zero layout shift
+- [4. Token-driven styling](#4-token-driven-styling) — the variables behind every branch
+- [5. Timing thresholds (which loader, when)](#5-timing-thresholds-which-loader-when) — the NN/g limits that decide the treatment
+- [6. Variants](#6-variants) — first-use onboarding empty · no-results (search / filter)
+- [7. Responsive behavior](#7-responsive-behavior) — padding by breakpoint, width-constrained description
+- [8. Complete, copy-pasteable code](#8-complete-copy-pasteable-code) — `DataState`, the anti-flicker hook, all six branches, the table-empty helper
+- [9. Accessibility notes](#9-accessibility-notes) — `aria-busy`, `role="status"`, announce without hijacking
+- [10. Anti-slop callout](#10-anti-slop-callout) — the blank flash of death, and the rest
+- [11. Decision flow (recap)](#11-decision-flow-recap) — model, pick, then ship the sequence
+- [Sources](#sources)
+- [Corpus grounding — empty / loading / error (2026-07-05 research)](#corpus-grounding--empty--loading--error-2026-07-05-research) — copyable rules, defaults, preserved confidence flags
+
 ---
 
 ## 1. When to use it
@@ -38,19 +54,38 @@ forget: **no-results** (empty because of a filter, not because it's new) and
 
 ## 2. The state matrix
 
-A data surface resolves to exactly one of these. Enumerate them up front; don't
-discover them in production.
+A data surface resolves to exactly one state **per scope**. Enumerate them up front;
+don't discover them in production. Scope is the axis most matrices omit, and it is the
+one that fails in production: a collection-scoped state machine cannot express "row 14
+failed to save while rows 1–13 are fine".
 
-| State | Trigger | What renders | Blocking? |
-|---|---|---|---|
-| **Loading — first load** | Request in flight, no cached data | Skeleton mirroring the final layout | Yes |
-| **Loading — refetch / background** | Request in flight, stale data present | Keep stale data + subtle top-bar / dimmed / inline indicator | No |
-| **Empty — first use** | Success, 0 items, user never had data | Onboarding empty: icon + title + description + primary CTA | — |
-| **Empty — no results** | Success, 0 items, due to search/filter | Terse "no results" + clear-filter action; **no** big illustration | — |
-| **Empty — all done** | Success, 0 items, user completed everything | Light celebration ("All caught up") | — |
-| **Partial / degraded** | Some data loaded, some failed | Render what loaded + inline error for the failed part | No |
-| **Error** | Request failed | Icon + what happened + retry + escape hatch | Depends on scope |
-| **Populated** | Success with data | The real UI | — |
+| Scope | State | Trigger | What renders | Blocking? |
+|---|---|---|---|---|
+| Collection | **Loading — first load** | Request in flight, no cached data (`isPending`) | Skeleton mirroring the final layout | Yes |
+| Collection | **Loading — refetch / background** | Request in flight, stale data present (`isFetching && !isPending`) | Keep stale data + a subtle top bar. **Not a dimmed body** — undocumented, and worse than a bar mid-scan | No |
+| Collection | **Showing previous page** | `isPlaceholderData` | Say the data on screen is the previous page's; disable Next until the next page is known | No |
+| Collection | **Empty — suppressed during load** | Loading **and** an empty query | Render **nothing**. Raycast: the empty view "is *never* displayed if the `List`'s `isLoading` property is true and the search bar is empty" | Yes |
+| Collection | **Empty — first use** | Success, 0 items, user never had data | Onboarding empty: icon + title + description + primary CTA | — |
+| Collection | **Empty — no results** | Success, 0 items, due to search/filter | Terse "no results" + clear-filter action; **no** big illustration | — |
+| Collection | **Empty — all done** | Success, 0 items, user completed everything | Light celebration ("All caught up") | — |
+| Collection | **Partial / degraded** | Some data loaded, some failed | Render what loaded + inline error for the failed part | No |
+| Collection | **Truncated by a server cap** | The server capped the response | State the cap and how to narrow (Stripe caps `limit` at 100) | No |
+| Collection | **Stale, with age** | Older than `staleTime`, not refetching | Show *when* it was fetched, not a boolean — `staleTime` defaults to `0` | No |
+| Collection | **Offline / reconnecting** | Connection lost | Persistent non-blocking banner; keep the last data and say it is frozen | No |
+| Collection | **Reconnected** | Connection restored | Announce via a live region **without moving focus** (SC 4.1.3, AA) | No |
+| Collection | **Rate-limited / retry scheduled** | 429 or backoff active | Say when the next attempt happens; `retry` defaults to 3 on the client | No |
+| Collection | **Error** | Request failed | Icon + what happened + retry + escape hatch | Depends on scope |
+| Collection | **Populated** | Success with data | The real UI | — |
+| Item / row | **Optimistic · saving · save-failed** | A mutation on one item | Item-scoped pending, then either commit or an item-scoped error that **preserves the user's input** | No |
+| Item / row | **Deleted, undo window open** | Destructive action fired | Hold the slot or swap in an undo affordance; do not reflow the list under the cursor | No |
+| Item / row | **Conflicted** | Remote change collided with a local edit | Show both values and who changed it; never silently overwrite | No |
+| Item / row | **Read-only, with a reason** | Permission or lifecycle | State the reason; a bare grey row is not a state | — |
+| Field / cell | **Loading · invalid · masked** | Per-field async, validation, or ACL | Placeholder at the field's real width; inline `aria-invalid`; masked-with-an-explanation, never blank | No |
+| Field / cell | **Empty vs zero vs null vs N/A** | Four different meanings | **Four different renderings**: `0` is data, blank is missing, "—" is not-applicable, "Unknown" is unresolved | — |
+
+The full row- and cell-scoped matrix for dense grids — keyboard cursor vs selection,
+range anchors, value-change flashes, truncation-with-inspect — lives in
+`data-table.md` §5; don't duplicate it here.
 
 Two insights from premium products (Linear / Vercel / Stripe): **errors are
 designed, not stubbed**, and **a generic "no data" placeholder destroys
@@ -75,6 +110,17 @@ Empty                       // outer container: centers content, min-height, tex
 └── EmptyContent            // primary CTA (+ optional secondary), input group, or docs link
 ```
 
+> **The composed first-use empty state = small monochrome illustration/icon + one
+> imperative headline + ONE primary CTA — and the surrounding chrome is hidden
+> when there's no data.** Filter bars, sort menus, column pickers, pagination,
+> bulk toolbars operate on rows that don't exist yet; rendering them on a
+> zero-data surface is dead noise that dilutes the single action. Hide them and
+> let the composed empty state carry the surface — but keep the **stable
+> create/import action** (in its toolbar spot) so it doesn't relocate as data
+> comes and goes; the empty state *echoes* that action, it doesn't own it. Cap
+> CTAs at **1 primary + ≤1 secondary**, both real semantic `Button`/`Link`s in tab
+> order (→ anti-slop.md APP-UI `dead-end-filter-empty` for the copy contract).
+
 ### 3.2 Loading (skeleton)
 
 ```
@@ -85,6 +131,19 @@ Empty                       // outer container: centers content, min-height, tex
 Mirror the populated layout: same grid, same card dimensions, roughly the same
 item count (3–6), realistic text widths (`w-3/4`, `w-1/2`). Skeleton only the
 **primary structural blocks** — not every label, icon, or divider.
+
+> **Skeletons are shaped to the content, never a spinner.** The skeleton IS the
+> reserved layout space — reuse the *same* card/row box (same padding, radius,
+> column widths, item count) so the swap to real content is zero-CLS. A centered
+> spinner over a card grid conveys only "busy," previews no shape, and reflows
+> when data lands. **The swap:** when the skeleton geometry matches the real box
+> exactly, a **hard cut** is correct (nothing shifts, so nothing needs blending —
+> see the corpus appendix); reach for a **short crossfade (~150ms opacity)** only
+> to *mask a residual mismatch* you couldn't fully eliminate (a soft blend reads
+> as one morph instead of two overlapping states). Break large skeletons into
+> per-block pieces so a streaming payload reveals filled slots progressively while
+> the rest still shimmers. (→ tokens.md §11 `skeleton geometry = real content`;
+> corpus appendix below, "Skeleton mimics the final content's exact footprint".)
 
 ### 3.3 Error (scoped or full)
 
@@ -97,6 +156,16 @@ Empty (variant reuse)
     ├── Button           → "Try again" (primary)
     └── Button variant="ghost" → escape hatch ("Go back" / "Contact support")
 ```
+
+> **The error is an inline, in-layout state — never `alert()` / `window.confirm`.**
+> A native `alert()` (or a bare thrown error) is a browser-chrome modal that blocks
+> the thread, can't be styled or themed, carries no retry/escape, and reads as an
+> unhandled crash. Render the failure **in the same wrapper the data would fill**
+> (the composed `Empty` error branch, or one full-width cell for a table — §8),
+> so the surface stays in-place with zero layout shift and the header/toolbar
+> survive. Scope it to the blast radius: field · section-card · toast · full-page
+> (→ §5, §10). Human title + reassurance up front; raw stack behind a "Technical
+> details" disclosure — never in the user's face.
 
 ---
 
@@ -699,3 +768,124 @@ Linear/Vercel-grade — and the fix:
 - Figr — Error state design patterns: https://figr.design/blog/error-state-design-patterns
 - Pencil & Paper — Error message UX: https://www.pencilandpaper.io/articles/ux-pattern-analysis-error-feedback
 - NN/g — Response time limits: https://www.nngroup.com/articles/response-times-3-important-limits/
+
+---
+
+## Corpus grounding — empty / loading / error (2026-07-05 research)
+
+Additive appendix grounding the recipe above in the app-UI research corpus
+(`docs/research/notes/product-app-ui-patterns.md`, section **"## Empty / loading /
+error states"**). Winners **gate loading by duration**, make skeletons
+**content-shaped** to avoid CLS, go **optimistic** on user actions, and treat
+empty states as **intentional guided variants** with one named action. Values
+below are copyable; each carries the corpus's confidence flag where one exists.
+
+### Copyable rules (with values)
+
+- **Gate loading by expected duration.** `<1s` → render **nothing**; `1–10s` →
+  **skeleton** (previewable layouts) or **spinner** (short blocking non-layout
+  actions — submit / auth); `>10s` → **determinate progress bar + cancel**.
+  ⚠️ The NN/g skeleton-screens source is a **2016 article** — bands are still
+  cited but predate the modern web; **pair it with a recent source**. ⚠️ NN/g's
+  actual split is duration-based (spinner best 2–10s, skeleton <10s, progress
+  >10s); the **"full-page vs single-widget" scope split is an unmarked
+  interpretation** — treat it as a separate heuristic, not NN/g's wording.
+- **Show-delay + minimum-visible so fast responses never flash.** Delay
+  **~150–300ms** before showing the loader; keep it up **~300–500ms** minimum
+  once shown. (This is the same anti-flicker discipline as §5's
+  `useDelayedLoading`.) ⚠️ Sourced to Vercel guidelines [medium — the exact ms
+  bands weren't confirmed on the page; standard frontend-perf convention].
+- **Skeleton mimics the final content's exact footprint** — the skeleton *is* the
+  reserved layout space. Use explicit per-instance dims (`h-[20px] w-[100px]
+  rounded-full`); drive skeleton + real content from shared spacing vars → **zero
+  CLS**.
+- **Animate skeletons on compositor-only properties** (opacity / transform /
+  background-position), **never** width / top / left. Tailwind `animate-pulse` =
+  `pulse 2s cubic-bezier(0.4,0,0.6,1) infinite`; shimmer alt = `2.5s linear
+  infinite` on background-position; cycle 1–2s; provide a reduced-motion static
+  fallback.
+- **Swap skeleton → content as a HARD CUT** — no cross-fade. Break large skeletons
+  into independently-swappable pieces for progressive reveal. (Reconciles with §3.2:
+  a hard cut is correct *because* the skeleton geometry already matches the real box,
+  so nothing shifts to blend; the short crossfade there is a fallback to mask a
+  *residual* geometry mismatch you couldn't fully eliminate — not the default.)
+- **Spinners use LINEAR easing** — never ease-in/out on an infinite loop.
+- **Optimistic CRUD.** Apply the mutation to local state **first**, sync in the
+  background, **no spinner** on the action. ⚠️ Linear's "WebSocket" transport
+  detail is **not confirmed** in the performance.dev source (which documents
+  IndexedDB + service-worker precache + background sync) — soften to "background
+  async sync via a durable local queue" [medium].
+- **On optimistic failure, retry-then-revert** (don't visibly undo on a transient
+  blip); pair with a **timed undo window** instead of an upfront confirm.
+  ⚠️ **Superhuman archive undo is 10 seconds, not 5** (official docs) — correct any
+  "5s" reference.
+- **Match error surface to scope/severity.** Inline (field) · toast (low-severity
+  transient / background) · full-page takeover (a core section fails). Error copy
+  **guides to a fix and is non-blaming**: not "Invalid API key" but "Your API key
+  is incorrect or expired. Generate a new key in your account settings." On
+  validation failure, inline error + focus the first invalid field. Announce
+  toasts / inline validation / async empty regions via `aria-live="polite"`.
+  Trailing ellipsis on in-progress labels: "Loading…", "Saving…", "Generating…".
+- **Empty states = one of 4 intentional variants**: **Blank Slate**,
+  **Informational**, **Educational**, **Guide-with-starter-content**; guided
+  out-activates blank. ⚠️ **The "30–40% activation lift" figure was STRIPPED** —
+  no linked study; keep only the qualitative claim.
+- **Title Case naming the exact absent/filtered condition; sentence-case
+  description echoing the live query** in curly quotes. Title: `No Logs Match Your
+  Filter`; description: `No logs match "${query}". Clear the filter…`.
+- **Cap CTAs at 1 primary + at most 1 secondary.** Specific Title-Case verb+noun
+  labels — **"New Issue", never "Get Started" / "OK" / "Continue"**; must be a real
+  semantic `Button`/`Link` in tab order.
+- **Filter-empty states always offer a next step** (clear-filters or docs link) —
+  never dead-end; teach the populating mechanism ("Star your favorites to list
+  them here.").
+- **Toast auto-dismiss ~4s, paused on hover and on `document.hidden`.** Animate
+  toasts with **interruptible CSS transitions** (translateY), **not keyframes**, so
+  a rapid arrival retargets mid-flight; stacked toasts scale `1 − 0.05*index`,
+  offset `gap*index` (~14px). **One consistent anchor app-wide** (of 6);
+  promise-based toast **mutates in place** (loading → success/error), not three
+  toasts.
+- **Swipe-dismiss = velocity threshold OR distance, whichever first, + drag
+  friction.** ⚠️ The `~0.11` constant is an **empirically-tuned Sonner default**
+  (px-drag / ms), author-acknowledged as trial-and-error — state the unit, treat as
+  directional, not a perceptual law.
+
+### Token / motion defaults (corpus "states" block)
+
+- Loading gate: `<1s` / `1–10s` / `>10s`
+- Show-delay `150–300ms`, min-visible `300–500ms`
+- Skeleton pulse `2s cubic-bezier(0.4,0,0.6,1)` or shimmer `2.5s linear`; **hard-cut** swap
+- Spinner: **linear**
+- Toast `4000ms` (pause on hover + `document.hidden`); enter `400ms` translateY; stack scale `1 − 0.05*i`
+- General UI ceiling `<300ms`, **ease-out** for on/off-screen motion
+- Optimistic: local write + **retry-then-revert** + timed undo
+- Empty CTA cap **1 primary + ≤1 secondary**, semantic, in tab order
+- Processing-label suffix: `…`
+
+### AI-slop failures (corpus)
+
+Full-page spinner/blank for every load · frame-only skeletons (no content shapes) ·
+mismatched skeleton dims (CLS) · shimmer on layout props / ease-in-out spinner ·
+spinner on every CRUD action · "Something went wrong" with no fix · pre-disabled
+submit · lone-icon "No data" + "Get Started" · empty/error not in tab order, no
+`aria-live` · dead-end filter-empty · toast overuse / varying anchors · timers
+firing while hovered or backgrounded · cross-fade skeleton or restartable-keyframe
+toasts · clashing stock illustrations.
+
+### Corpus flags preserved (read before shipping any value)
+
+1. **NN/g skeleton-screens article is 2016** — bands still cited but predate the
+   modern web; pair with a recent source.
+2. **"Full-page vs single-widget" scope split is an unmarked interpretation**, not
+   NN/g's wording — treat as a separate heuristic.
+3. **Superhuman undo is 10s, not 5s** (official docs) — correct any "5s".
+4. **"30–40% activation lift" figure was STRIPPED** (unsourced) — keep only the
+   qualitative guided-beats-blank claim.
+5. **Swipe `~0.11` is a tuned Sonner default** (px-drag / ms, trial-and-error), not
+   a perceptual constant — directional.
+6. **performance.dev "WebSocket" transport is unconfirmed** (source documents
+   IndexedDB + service-worker precache + background sync) — soften to "durable
+   local queue".
+
+*Source:* `docs/research/notes/product-app-ui-patterns.md` → "## Empty / loading /
+error states" (per-claim citations and confidence flags live inline there).

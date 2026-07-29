@@ -2,6 +2,18 @@
 
 > A tier-card pricing section with an annual/monthly billing toggle, a highlighted recommended plan, and per-plan CTAs. Built with React + Tailwind v4 + shadcn/ui. The kind Vercel/Linear ships: dark-friendly, one accent color, restrained motion, `tabular-nums` prices that never jiggle.
 
+## Contents
+
+- [When to use it](#when-to-use-it) — 2–4 self-serve plans, or anchoring a pricing page above a comparison table
+- [Anatomy](#anatomy) — header, billing toggle, tier cards, footnote
+- [Token-driven styling](#token-driven-styling) — the token layer plus the recommended-tier tint
+- [Variants](#variants) — 3-tier with billing toggle · in-app "current plan" upgrade screen · cards + comparison table
+- [Interaction / state matrix](#interaction--state-matrix) — toggle, cards and CTAs, state by state
+- [Responsive behavior](#responsive-behavior) — two-up on tablet, recommended-first on mobile, no scaling in a single column
+- [Accessibility](#accessibility) — the toggle is a radiogroup, not a lone switch; announce price changes
+- [Anti-slop callout](#anti-slop-callout) — prices that jiggle, every emphasis at once
+- [Complete code](#complete-code) — drop-in `PricingSection` with an accessible segmented toggle
+
 ---
 
 ## When to use it
@@ -42,6 +54,13 @@ section  (vertical rhythm, centered container)
 Card internal order is load-bearing: **name → price → description → CTA → features**. The CTA sits *above* the feature list so the decision is reachable without scrolling the card; the features justify the click after.
 
 The **Enterprise/custom** card swaps the numeral for `Custom` / "Let's talk" and the CTA for **Contact sales**.
+
+**Assume the visitor jumped here.** Pricing sits deep in the page — the median measured landing
+page is 11.2 viewports and only 26% of viewing time falls past the second screenful
+([NN/g](https://www.nngroup.com/articles/scrolling-and-attention/)). So: **repeat the hero's
+primary CTA verbatim** at the top of the section, allow **no more than two** actions per plan
+card — the CTA plus at most one low-emphasis link, never three — and make the section
+self-explanatory with no context carried down from above.
 
 ---
 

@@ -2,8 +2,8 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "superdesign",
   "displayName": "superdesign",
-  "version": "0.1.0",
-  "description": "Design and build brand-specific UI with React + Tailwind v4 + shadcn/ui through a system-first workflow: brand -> OKLCH tokens -> a vetted pattern cookbook -> polish -> anti-slop and accessibility gates. A design-system generator rather than a fixed theme, aimed at output that looks deliberately designed instead of AI-generated.",
+  "version": "0.2.0",
+  "description": "Design and build brand-specific UI with React 19 + Tailwind v4 + shadcn/ui through a system-first workflow: brand -> art-direction brief -> OKLCH tokens -> a vetted pattern cookbook -> polish -> anti-slop, accessibility and rendered-geometry gates that exit non-zero. Includes reference mining: measure a real product's design and prove your output differentiated from it. A design-system generator rather than a fixed theme, aimed at output that looks deliberately designed instead of AI-generated.",
   "author": {
     "name": "Timmy-Lane",
     "url": "https://github.com/Timmy-Lane"
@@ -11,5 +11,13 @@
   "homepage": "https://github.com/Timmy-Lane/prd-pipeline",
   "repository": "https://github.com/Timmy-Lane/prd-pipeline",
   "license": "MIT",
-  "keywords": ["ui", "design-system", "tailwind", "shadcn", "oklch", "accessibility", "frontend"]
+  "keywords": [
+    "ui",
+    "design-system",
+    "tailwind",
+    "shadcn",
+    "oklch",
+    "accessibility",
+    "frontend"
+  ]
 }

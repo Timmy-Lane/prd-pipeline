@@ -5,6 +5,21 @@
 > **Field** family. One column, top-aligned labels, validate-on-submit-then-re-validate,
 > and a Linear-style sticky save bar that only appears when something actually changed.
 
+## Contents
+
+- [When to use it](#when-to-use-it) — entering or editing structured data the user reviews before committing
+- [Anatomy](#anatomy) — label → control → description → error, always in that stack
+- [Token-driven styling](#token-driven-styling) — the shadcn variables the form assumes
+- [Variants](#variants) — create / new-resource · card-per-section settings · multi-step wizard
+- [Interaction / state matrix](#interaction--state-matrix) — the canonical eight states, per control
+- [Validation timing (the rule that matters most)](#validation-timing-the-rule-that-matters-most) — validate on submit, then re-validate on change
+- [Responsive behavior](#responsive-behavior) — `max-w-2xl` body, ≥16px inputs on mobile
+- [Accessibility](#accessibility) — real labels, `aria-describedby`, `aria-invalid`
+- [Anti-slop callout](#anti-slop-callout) — the tells that mark a form as generated, and what to do instead
+- [Complete example](#complete-example) — a drop-in project-settings form with a sticky dirty-state save bar
+- [Quick checklist before you ship](#quick-checklist-before-you-ship) — the pre-ship boxes
+- [Corpus grounding — forms & multi-step (2026-07-05 research)](#corpus-grounding--forms--multi-step-2026-07-05-research) — copyable rules with values, confidence flags carried forward
+
 ---
 
 ## When to use it
@@ -142,7 +157,7 @@ wires them into utilities via the `@theme inline` block:
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --radius: 0.625rem;
+  --radius: 0.5rem;   /* 8px — required brand-step output, never a default (→ tokens.md §6) */
 }
 .dark {
   --background: oklch(0.145 0 0);
@@ -288,16 +303,23 @@ anatomy; the wizard is orchestration around it.
 
 Every element ships with **all** these states, not just the happy path.
 
-**Per field:**
+**Per field — all eight interactive states, each decided (not just the happy path).**
+Every control ships the canonical eight — **Default · Hover · Focus · Active · Disabled ·
+Loading · Error · Success** (→ motion.md §6). "No change" is a valid decision for a state,
+but it must be a *decision*: the common miss is styling hover without focus (keyboard users
+never see hover) or shipping Error without Success. On a text input several of these are
+handled for you by the shadcn control — the table names who owns each.
 
 | State | Behavior |
 |---|---|
-| **Empty / placeholder** | Placeholder is an *example value* (`acme-marketing`, `you@example.com`), never an instruction. Optional trailing ellipsis to signal intent. |
-| **Focus** | Visible `focus-visible` ring (`ring-ring/50`) — `:focus-visible`, never bare `:focus`. Built into shadcn controls. |
-| **Filled / valid** | No special styling by default. A success affordance (check) only for high-stakes fields. |
-| **Invalid** | `aria-invalid` on control + `data-invalid` on `Field` → destructive border + ring + red inline message with an icon. Never color alone. |
-| **Loading (async validation)** | e.g. checking slug availability — inline spinner in the field's suffix; don't block typing. |
-| **Disabled** | Only when input is truly impossible. Keep fields *focusable* while the form saves; don't disable a whole form on invalid. |
+| **Default / empty** | Placeholder is an *example value* (`acme-marketing`, `you@example.com`), never an instruction. Optional trailing ellipsis to signal intent. |
+| **Hover** (pointer only) | Subtle only, and **gated behind `@media (hover: hover)`** so it doesn't stick on touch (shadcn's `hover:` utilities compile under Tailwind v4's hover variant, which already carries this guard — don't hand-roll a bare `:hover`). Text inputs barely change; cursor + a faint border tint is enough. |
+| **Focus** | Visible `focus-visible` ring (`ring-ring/50`) — `:focus-visible`, never bare `:focus`, never `outline:none` without a replacement. Built into shadcn controls. |
+| **Active / pressed** | Only meaningful on the *controls* inside a form (Button, radio card, Switch). The submit Button gets a tactile `active:scale-[0.98]` / `active:translate-y-px` (≤160ms); a plain text input has no press state. |
+| **Disabled** | Only when input is truly impossible. Reduced opacity, no pointer. Keep fields *focusable* while the form saves; don't disable a whole form on invalid. |
+| **Loading (async validation)** | e.g. checking slug availability — inline spinner in the field's suffix; **don't block typing.** Add a ~150–300ms show-delay so a fast check doesn't strobe. |
+| **Error / invalid** | `aria-invalid` on control + `data-invalid` on `Field` → destructive border + ring + red inline message **directly beneath the field**, with an **icon** (never color alone), wired via `aria-describedby`. |
+| **Success / valid** | **No special styling by default** — a green ring on every filled field is noise. Reserve a success affordance (a check, "slug available") for **high-stakes fields only** (password strength, availability). |
 | **Read-only** | Value shown, not editable — visually distinct from disabled. |
 
 **Per form:**
@@ -317,6 +339,25 @@ Two rules that separate shipped-quality from demo-quality:
    button just hides *why* it's disabled.
 2. **On any error, never clear what the user typed.** Server rejected the slug? Keep all six fields
    exactly as entered and point the error at the slug.
+
+**Mandatory completeness — Loading · Empty · Error (not optional polish).** A form that *loads*
+its defaults (a settings/edit surface prefilled from the server) is a data component, and every data
+component ships all three surface-level states (→ motion.md §6; critique.md §3), not just the filled
+happy path:
+
+- **Loading** — while the initial values fetch, render a **skeleton shaped like the form** (label +
+  field rows at the real geometry), **not** a centered spinner over a blank card. It sets the spatial
+  expectation so the real fields snap into an understood layout. Don't animate the submit while data
+  is still loading.
+- **Empty** — a *create* form starts from empty `defaultValues` (Variant A) — that's the intended
+  empty, not a failure. The state to actually design is **"the resource to edit doesn't exist / has
+  no data yet"**: show a composed empty state that explains how to populate it, not a blank card or a
+  form bound to `undefined`.
+- **Error** — this splits two ways and both must exist: the **field-level** error (inline under the
+  field, icon + text, `aria-invalid` + `aria-describedby`) *and* the **surface-level** error (the
+  initial load itself failed) — an inline `role="alert"` block with a **Retry**, never an `alert()`
+  and never a silently blank form. The form-level *server-submit* error is the third (the `role="alert"`
+  banner in the example); keep all three distinct.
 
 ---
 
@@ -886,6 +927,8 @@ export default function SettingsPage() {
 
 - [ ] All colors are tokens (`grep` the file for `#` — should find nothing).
 - [ ] Every control has a real `<label htmlFor>` (via `FieldLabel`); no placeholder-as-label.
+- [ ] All eight interactive states decided (Default/Hover/Focus/Active/Disabled/Loading/Error/Success); hover gated by `@media (hover:hover)`, focus is `:focus-visible`.
+- [ ] Surface completeness: prefilled forms have a **Loading** skeleton + a load-**Error** retry; the missing-resource **Empty** state is composed, not a blank card.
 - [ ] Invalid state sets both `data-invalid` on `Field` and `aria-invalid` on the control.
 - [ ] Every error names the field + the fix, ends with a period, and has an icon (not color alone).
 - [ ] Save is enabled while invalid; disabled only while submitting; spinner keeps its width.
@@ -904,3 +947,116 @@ Web Interface Guidelines; GitHub Primer "Saving" pattern; NN/G form usability, p
 error-reporting guidelines; LogRocket & Smashing / Smart Interface Patterns on inline vs.
 after-submit validation; Smashing & WeWeb multi-step form guides; Wasp advanced rhf + Zod + shadcn;
 UXmatters label placement; Damian Wajer autosave vs. explicit save._
+
+---
+
+## Corpus grounding — forms & multi-step (2026-07-05 research)
+
+> Additive appendix. The recipe above is the house pattern; this section grounds it in the
+> app-UI research corpus with copyable rules + specific values, and carries the corpus's own
+> confidence flags forward unedited. Where a rule below refines the recipe, prefer the recipe's
+> shadcn/Field wiring for the *how* and treat these as the *why + the number*.
+> _Source: `docs/research/notes/product-app-ui-patterns.md` → "## Complex & multi-step forms"._
+
+**Sourcing honesty (read before copying a value):**
+
+- **`raunofreiberg/interfaces` is ONE practitioner's uncited checklist** — the rules sourced solely
+  to it (native `<form>` submit, disable-on-submit, 16px iOS-zoom, box-shadow focus, fixed
+  font-weight, icon-in-hit-area, keyboard nav + `Cmd+Backspace`, hover media query, mousedown
+  pickers) are behaviorally sound but **medium confidence**. Where the underlying fact is a
+  browser/CSS behavior, prefer the primary source: **16px→no-iOS-zoom is WebKit**; **box-shadow
+  respecting `border-radius` (outline doesn't) is the CSS spec / MDN**.
+- **"4–5 fields per step" is a single secondary source** (reform.app), uncorroborated — treat as a
+  directional estimate, not a hard cap. Stripe checkout corroborates the single-column stack, not
+  the field count.
+- **The numeric motion defaults carry NO citation** — `active.scale 0.96`, `modal enter 0.8→1`,
+  `≤200ms micro-interaction`, `undo ~5s` are suggested-but-uncited (rationale prose only,
+  directionally consistent with raunofreiberg/Superhuman). Do not present them as measured.
+
+### Copyable rules (with values)
+
+**Keyboard-operable creation & submit**
+
+- **Open creation from anywhere with a single unmodified key** — Linear `C` = create globally;
+  **palette (`Cmd/Ctrl+K`) as the fallback**; in-form single letters (`S/P/L/A/I`) for pickers;
+  `?` = all shortcuts. _(Linear "Invisible details" — verify bindings against the in-app `?` panel.)_
+- **Wrap inputs in a native `<form>` so Enter submits** — never a custom keydown handler. This
+  recipe's `<form onSubmit={handleSubmit(...)}>` already does this. _(raunofreiberg [medium].)_
+- **Disable submit immediately on submit to block duplicate sends** — and **NEVER put a
+  tooltip/`title` on a disabled control** (inaccessible; the accessible name / hint is lost).
+  The recipe gates on `isSubmitting`, which satisfies this. _(raunofreiberg [medium].)_
+- **Open dropdown pickers on `mousedown`, not `click`** — perceived-instant response. _(raunofreiberg [medium].)_
+- **List pickers: keyboard-nav + delete** — arrows navigate, **`Cmd+Backspace` deletes the focused
+  item**. _(raunofreiberg [medium].)_
+
+**Input & focus mechanics**
+
+- **Input font-size ≥16px on mobile** to prevent iOS auto-zoom — matches the recipe's
+  `text-base md:text-sm`; don't override to `text-sm` unconditionally. _(raunofreiberg [medium]; the
+  underlying zoom behavior is **WebKit** — prefer that as the primary fact.)_
+- **Focus rings via `box-shadow`, not `outline`** — box-shadow respects `border-radius`; outline
+  doesn't. _(raunofreiberg [medium]; the radius behavior is **CSS spec / MDN** — cite that for the fact.)_
+- **No layout shift across states; fixed font-weight across states** — don't bold-on-hover or resize
+  on focus/error (reserve width by keeping the label/button width, as the recipe does for the
+  spinner). _(raunofreiberg [medium].)_
+- **Layer icon/prefix/suffix inside the hit area** so clicking it focuses the input — the recipe's
+  `acme.dev/` slug prefix uses `pointer-events-none absolute`; if the affordance is meant to be
+  clickable (e.g. a clear/search icon), keep it inside the input's hit target. _(raunofreiberg [medium].)_
+- **Gate hover behind `@media (hover: hover)`** so hover styles don't stick on touch. _(raunofreiberg [medium].)_
+
+**Step structure (multi-step / wizard — extends Variant C)**
+
+- **Cap 4–5 fields per step, single-column stack**; group only closely related questions.
+  _(reform.app [secondary — single source, uncorroborated]; single-column corroborated by Stripe checkout.)_
+- **Persistent, labelled step indicator; simplify to dots on mobile.** _(Stripe checkout, reform.app.)_
+- **Exactly one dominant primary action per step; Back stays subdued.** Specific labels —
+  **"Continue" / "Next step", never "Submit" / "OK".** Fixed button position across steps; sticky
+  primary on mobile. _(Stripe checkout.)_
+
+**Validation & error copy**
+
+- **Validate on blur, not per keystroke** — go live only for high-risk fields (card numbers). This
+  aligns with the recipe's on-submit-then-onChange default; on-blur (`mode: "onTouched"`) is the
+  format-field variant. _(Stripe checkout, Tetralogical.)_
+- **Error copy states the fix, inline directly beneath the field, in red text + border** —
+  "Password must be 8+ characters with 1 number", not "Invalid". _(reform.app, Tetralogical.)_
+
+**Accessibility (accessible-by-contract)**
+
+- **`aria-invalid="true"` on invalid controls** (mirror as `data-invalid` for CSS) — exactly the
+  recipe's `Field data-invalid` + control `aria-invalid` pairing. _(shadcn RHF — primary.)_
+- **`aria-describedby` links error ↔ control, set ONLY when an error exists** (empty → don't set it).
+  _(shadcn issue #7171 — primary.)_
+- **Announce dynamic errors via a live region** (`role="alert"` / `aria-live`, WCAG 4.1.3) — the
+  recipe's form-level `role="alert"` banner. _(Tetralogical [secondary — pair with W3C WCAG Understanding for the criterion].)_
+- **On submit-with-errors, move focus to the first error target** (summary-of-links or first invalid
+  control) — never leave focus on the submit button. rhf's `shouldFocusError` does this. _(WebAIM — primary.)_
+- **Mark required programmatically** (`required` / `aria-required`), not just visually. _(WebAIM — primary.)_
+
+**Persistence**
+
+- **Persist wizard progress; never wipe data on reload.** Auto-save each step (localStorage +
+  server sync), surface "Progress saved from [date]". _(reform.app [secondary — sync strategy/durations unconfirmed].)_
+- **Optimistic keyboard-triggered state changes + a timed undo (~5s).** _(blakecrosley Superhuman guide
+  [secondary, low confidence]; note the ~5s value is uncited — see motion defaults below.)_
+
+### Token / motion defaults (corpus forms block)
+
+- **input font 16px**; **focus via box-shadow (not outline)**; **micro-interaction ≤200ms**
+- **active press scale `0.96`** (never below ~0.9)
+- **modal enter: opacity 0→1, scale `0.8→1`** (never from `scale(0)`)
+- **validation on blur**; error inline below the field, **red text + border**, `role="alert"`
+- **fields/step 4–5** `[single-source estimate]`; **columns: 1**; **undo toast ~5s**;
+  **hover guard `@media (hover:hover)`**; **dropdown opens on `mousedown`**
+- ⚠️ **The numeric defaults `active.scale=0.96`, `modal 0.8→1`, `≤200ms`, `undo ~5s` carry NO source
+  citation** beyond rationale prose — suggested-but-uncited, directionally consistent with
+  raunofreiberg / Superhuman but not independently verified. Use as sane starting points, not specs.
+
+### AI-slop failures (forms & multi-step)
+
+Multi-column steps · 10+ fields per screen · no / decorative step indicator · two equally-weighted
+buttons · per-keystroke validation · bare "Invalid email" errors · visual-only required/error state
+(no ARIA) · focus left on the submit button after a failed submit · unconditional `aria-describedby`
+· custom keydown instead of a native `<form>` · no autosave / no resume · sub-16px inputs · outline
+focus rings that ignore `border-radius` · mouse-only pickers · a `1→0.8` press scale or a modal that
+pops from `scale(0)` · sticky hover on touch · a font-weight shift on hover.

@@ -10,6 +10,19 @@ affordance. The recipe below is the shape Linear, Vercel, and Stripe ship: group
 stacked `Card` sections, explicit save via a sticky dirty-state bar, and an isolated danger
 zone.
 
+## Contents
+
+- [When to use it](#when-to-use-it) — more than ~5 configuration buckets, switched between often
+- [Anatomy](#anatomy) — page header, persistent nav rail, stacked section cards, danger zone
+- [Token-driven styling](#token-driven-styling) — the semantic variables the page consumes
+- [Variants](#variants) — sidebar + stacked sections (default) · tabs + sections · two-column section
+- [Interaction / state matrix](#interaction--state-matrix) — every section state, dirty and saving included
+- [Responsive behavior](#responsive-behavior) — the rail collapses into a Sheet below `md`
+- [Accessibility notes](#accessibility-notes) — landmarks, `aria-current`, per-section labelling
+- [Anti-slop callout](#anti-slop-callout) — the "Misc" catch-all bucket and the other ship-blockers
+- [Complete example (copy-pasteable)](#complete-example-copy-pasteable) — grouped rail, rhf + zod, sticky dirty bar, auto-save row, danger zone
+- [Corpus grounding — settings (2026-07-05 research)](#corpus-grounding--settings-2026-07-05-research) — copyable rules with values, honesty flags preserved
+
 ---
 
 ## When to use it
@@ -93,7 +106,7 @@ consume them through Tailwind's `bg-*/text-*/border-*` utilities, which in v4 ma
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
+  --radius: 0.5rem;   /* 8px — required brand-step output, never a default (→ tokens.md §6) */
 }
 
 .dark {
@@ -848,3 +861,125 @@ export default function SettingsPage() {
   type-to-confirm.
 - Skeletons for load, read-only-with-explanation, `aria-current` nav, real `<nav>`/`<main>`
   landmarks, visible focus rings, and a `Sheet` rail on mobile.
+
+---
+
+## Corpus grounding — settings (2026-07-05 research)
+
+Grounds the recipe above with copyable rules + concrete values from the app-UI research
+corpus. Source note: `docs/research/notes/product-app-ui-patterns.md` → **"## Settings
+pages."** This is additive; it doesn't replace the recipe. Honesty flags from the corpus
+are preserved verbatim — do **not** launder reconstructed/directional numbers as verified
+product specs.
+
+**Corpus framing:** settings are IA, not a design failure
+([Linear](https://linear.app/now/settings-are-not-a-design-failure)). The craft: pick
+**one** save paradigm per view, give functional settings strong defaults (reserve toggles
+for taste), and match destructive-action friction to blast radius.
+
+### Copyable rules (with values)
+
+- **Choose the surface by task weight.** Default to the lightest in-context panel; escalate
+  to a full-width blocking view only for focused, start-to-finish tasks. Roots:
+  ContextView (default) / FocusView (full-width blocking) / SettingsView.
+  ⚠️ This taxonomy is specific to the **Stripe Apps extension platform**, *generalized
+  here* — **not** Stripe's own Dashboard settings IA. *Source:*
+  [docs.stripe.com/stripe-apps/design](https://docs.stripe.com/stripe-apps/design)
+  (primary).
+- **Full navigable settings page with its OWN left sub-nav, split Workspace/org vs
+  personal/account**, opened via `Cmd+,`. *Sources:* Linear (primary),
+  [Notion workspace settings](https://www.notion.com/help/workspace-settings) (primary; a
+  modal is acceptable for shallow settings). ⚠️ Linear added a **team-level** tier (team
+  owners, Dec 2025) for Business/Enterprise — the split can now be up to three tiers, not
+  strictly two.
+- **Strong opinionated defaults for functional settings; expose only taste as toggles**
+  (e.g. "show pointer cursor over links"). *Source:* Linear (primary).
+- **Pick ONE save paradigm per view** — never mix autosave and explicit-save on the same
+  page. *Source:* [GitLab Pajamas](https://design.gitlab.com/patterns/saving-and-feedback/)
+  (primary).
+- **Field-level autosave.** Click-type controls (toggle/select/checkbox) save immediately;
+  typed text saves on blur OR after an idle debounce. *Source:* GitLab (primary).
+  ⚠️ The specific **3000ms text debounce could not be independently confirmed** on the
+  cited page (which documents 250/500ms *validation* debounce) — verify before shipping;
+  keep the qualitative "blur-or-pause" rule regardless.
+- **Persistent autosave status with a relative timestamp**: "Saving…" (spinner) → "Saved
+  just now" → "Saved 1 min ago". *Source:* GitLab (primary).
+- **Autosave toasts differentiate singular vs batched, always carry inline Undo, and
+  persist failures**: "Change saved" / "x changes saved" / "Failed to save x changes"
+  (persistent + retry). Toast auto-dismiss pauses when the tab is hidden. *Sources:*
+  GitLab, [Sonner](https://sonner.emilkowal.ski/toast) (primary).
+- **Explicit-save dirty-state.** Save disabled by default; on the first change it enables
+  AND a "Discard changes" control appears; the label mirrors state ("Save" vs "Saved").
+  Guard navigation-away with a blocking modal (save-then-leave / discard-then-leave).
+  *Source:* GitLab (primary). (Note: this recipe's own SaveBar keeps Save enabled and only
+  disables while `isSubmitting`, per Primer/GitHub a11y — corpus GitLab guidance differs on
+  the disabled-until-dirty detail; reconcile per your a11y bar, keep exactly one paradigm.)
+- **Never autosave sensitive fields** (passwords, billing, privacy/visibility) — require
+  explicit confirmation. *Source:* GitLab (primary).
+- **Optimistic toggle.** Flip instantly at **50% opacity** in-flight → **100%** on confirm,
+  roll back on failure. *Sources:* GitLab,
+  [Vercel guidelines](https://vercel.com/design/guidelines) (primary).
+- **Match destructive friction to blast radius** (GitLab 3 tiers): **Low** (undoable) = no
+  confirm; **Medium** (recoverable) = one extra step / min 2 clicks; **High** (irreversible)
+  = full modal + danger button + type-to-confirm when it cascades. *Source:*
+  [GitLab destructive-actions](https://design.gitlab.com/patterns/destructive-actions/)
+  (primary).
+- **Irreversible actions use a non-dismissible AlertDialog** (no X, no outside-click,
+  announced as alert) — distinct from Dialog. *Source:*
+  [shadcn AlertDialog](https://ui.shadcn.com/docs/components/radix/alert-dialog) (primary).
+- **Type-to-confirm for the highest-blast-radius deletes; prefer the literal object NAME**
+  over a generic keyword (doubles as an identity check). GitHub repo delete = type the full
+  repo name; real keywords: Resend "DELETE", ConvertKit "DO IT". *Sources:*
+  [GitHub docs](https://docs.github.com/en/repositories/creating-and-managing-repositories/deleting-a-repository),
+  [Smashing Magazine](https://www.smashingmagazine.com/2024/09/how-manage-dangerous-actions-user-interfaces/)
+  (secondary).
+- **Destructive = dedicated red (not brand) + a non-color icon** on both trigger and
+  confirm; **button copy names the consequence** ("Delete Project", never "Yes"/"OK").
+  Isolate in a red-bordered "Danger Zone" placed **last**. *Sources:* shadcn, GitHub,
+  GitLab (primary/secondary).
+- **Build rows on a single Field primitive** (shadcn Field: vertical / horizontal /
+  responsive via `@container/field-group`) so the label-control-help rhythm stays
+  consistent. *Source:* [shadcn Field](https://ui.shadcn.com/docs/components/base/field)
+  (primary).
+- **Spacing hierarchy**: between-field `gap-6` (**24px**) noticeably larger than
+  within-field `space-y-2` (**8px**), ~**3:1**. ⚠️ shadcn has a known drift (8px in
+  `FormItem` vs 6px in a bare label+input) — pick one; **8px is the documented value**.
+  *Sources:* shadcn Field,
+  [GH issue #2305](https://github.com/shadcn-ui/ui/issues/2305) (primary).
+- **Don't pre-disable submit on incomplete forms**; surface validation on attempt, and
+  disable + spinner only in-flight. *Source:* Vercel (primary).
+- **Programmatically associate label+control; share one generous hit target**: ≥24px
+  desktop (expand if the visual is smaller), ≥44px mobile; **mobile input font-size ≥16px**
+  to prevent iOS auto-zoom. *Source:* Vercel (primary).
+- **Inline multi-tier role select on the member row** (Notion: Member / Membership admin /
+  Workspace owner), not a boolean or a separate page. *Source:* Notion (primary).
+
+### Token / motion defaults (corpus settings block)
+
+- between-field **24px** / within-field **8px**; save show-delay **150–300ms** /
+  min-visible **300–500ms**; mutation target **<500ms**
+- validation debounce: low-cost **250ms** / high-cost **500ms**; optimistic in-flight
+  opacity **50%**
+- focus: `:focus-visible`, **2px** ring, **full opacity (≥3:1)**; hit target ≥24px desktop
+  / ≥44px mobile; input ≥16px mobile. ⚠️ The ring detail "2px @ ~50% opacity" is
+  **Linear-reconstructed** — the *requirement* is Vercel-primary, the *number* is
+  reconstructed; shadcn's default ~50%-opacity ring commonly fails WCAG AA 3:1, so bump to
+  full opacity.
+- destructive: red / `destructive` variant + non-color icon
+- transition ceiling **<300ms**, ease-out `cubic-bezier(0.23,1,0.32,1)`, entry
+  `scale(0.95)/opacity:0`, stagger **30–80ms**; **never animate `Cmd+S` saves**
+- ⚠️ **Linear-reconstructed control tokens** (radius 8/12/16px, input padding 8×12, button
+  8×14, base 4px) are from a **third-party token dump, not Linear docs** —
+  `[reconstructed]`, low confidence. The **shadcn spacing values are the verifiable ones.**
+
+### AI-slop failures (settings)
+
+Mixing autosave and explicit-save · no dirty-state / no nav guard (silent data loss) · bare
+"Are you sure? Yes" instead of an AlertDialog · destructive buttons in brand color beside
+benign ones · generic-keyword type-to-confirm on cascade deletes · autosaving sensitive
+fields · toasts with no Undo (or timers running while the tab is hidden) · pre-disabled
+submit · blocking paste in validated fields · spinners with no show-delay/min-visible ·
+`:focus` or no ring · dead label zones on toggle rows · no relative-time save status · flat
+ungrouped nav with no Workspace/Personal split · over-boxing every section in a card · mixed
+6/8px gaps · sub-16px mobile inputs · animating keyboard saves · every option an
+equal-weight toggle.

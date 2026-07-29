@@ -12,6 +12,20 @@ allowed to leave**. Choosing the wrong one, or leaving a state undesigned, is wh
 separates a Linear/Vercel overlay from a boilerplate one. Design the *dismissal
 contract* and the *loading/error/success arc* before you write the markup.
 
+## Contents
+
+- [1. When to use it — pick the right primitive](#1-when-to-use-it--pick-the-right-primitive) — Dialog / AlertDialog / Sheet / Drawer, chosen by anchor and dismiss contract
+- [2. Anatomy](#2-anatomy) — one slot structure: fixed header, scrolling body, pinned footer
+- [3. Token-driven styling](#3-token-driven-styling) — overlay and surface variables that are correct in both modes
+- [4. Interaction / state matrix](#4-interaction--state-matrix) — every row, not just "open"
+- [5. Variants](#5-variants) — responsive form · type-to-confirm destructive · Sheet panel · undo-over-confirm
+- [6. Responsive behavior](#6-responsive-behavior) — swap the primitive at `sm`, not just the CSS
+- [7. Accessibility notes](#7-accessibility-notes) — roles, labels, focus return, and how not to break Radix
+- [8. Complete, copy-pasteable code](#8-complete-copy-pasteable-code) — media-query hook, `ResponsiveDialog`, both flagship variants, reduced-motion CSS
+- [9. Anti-slop callout](#9-anti-slop-callout) — modals used where a toast belongs, and the rest
+- [10. Decision flow (recap)](#10-decision-flow-recap) — the pick-and-ship sequence
+- [Sources](#sources)
+
 ---
 
 ## 1. When to use it — pick the right primitive
@@ -158,7 +172,8 @@ Design every row — not just "open". This is where premium overlays are won.
 | **Form error** | Request fail | Inline summary at the top of the body in a **polite `role="alert"` live region**; re-enable the form; keep the user's input. |
 | **Success** | Request ok | **Close, then confirm with a toast** — not another modal. |
 | **Empty** | Detail sheet, no record | Render an empty state *inside* the panel, don't leave it blank. |
-| **Destructive** | Delete / discard | Use `AlertDialog`; primary is `variant="destructive"`; for high-stakes deletes, **type-to-confirm** the resource name. |
+| **Destructive (reversible)** | Delete a row / item | **Don't open a dialog at all** — remove optimistically + fire a Sonner **Undo** toast, commit on expiry (see §5 Bonus). `AlertDialog` here is over-friction. |
+| **Destructive (irreversible)** | Delete account / project / discard | Use `AlertDialog`; primary is `variant="destructive"`; for high-stakes deletes, **type-to-confirm** the resource name. |
 | **Guarded close** | Dismiss w/ unsaved changes | Intercept `onOpenChange`; raise a "Discard changes?" `AlertDialog` (the one allowed double-confirm). |
 | **Closing** | `open` → false | `data-[state=closed]` fade + zoom-out (**faster** than open, ~150ms); **return focus to the trigger**. |
 | **Reduced motion** | `prefers-reduced-motion` | Fade only — drop the zoom/slide transform. |
@@ -167,6 +182,24 @@ Design every row — not just "open". This is where premium overlays are won.
 dismissal must be *gated* — submission in flight, a routing side effect, or an
 unsaved-changes guard. Uncontrolled (`DialogTrigger` + `DialogClose`) is fine for
 a read-only detail view with nothing to lose.
+
+**Two rules that decide whether an overlay should even exist** (canonical rule →
+motion.md §6; concrete shadcn recipes below):
+
+- **UNDO-OVER-CONFIRM.** For a *reversible* destructive action (delete a row, archive,
+  remove a member), **don't guard it with an `AlertDialog`.** Remove the item from the
+  UI immediately → fire a **Sonner toast with an `Undo` action** → commit the real
+  delete when the toast **expires** (its own timer *is* the confirmation window). Users
+  click through "Are you sure?" modals mindlessly, so a confirm dialog there is friction
+  that protects no one. **Reserve `AlertDialog` for account-level / irreversible / batch
+  ops only** (Variant B). Recipe in §5 Bonus.
+- **OPTIMISTIC-UI-EXCEPT-MONEY.** For low-stakes reversible mutations (like/follow/star,
+  archive, rename) **flip local state instantly and reconcile in the background** — no
+  overlay, no spinner. But **never fake success for money or irreversible writes**: a
+  checkout, a delete, a publish keeps a **real pending state** (disabled primary +
+  spinner, dialog stays open per the *Submitting* row) so a false "success" that later
+  reverses can't happen. The dividing line is *"can I silently roll this back?"* — likes
+  yes, charges no.
 
 ---
 
@@ -232,6 +265,61 @@ export function FiltersSheet({ children }: { children: React.ReactNode }) {
   );
 }
 ```
+
+### Bonus — Undo-over-confirm (no dialog: optimistic remove + Sonner Undo)
+
+The pattern that **replaces** an `AlertDialog` for reversible deletes. Remove the row
+immediately, commit the real delete on toast expiry, and let `Undo` cancel the pending
+commit. This is the Linear/Gmail "row is gone, but you have ~5s to take it back" feel —
+faster than a confirm for the common case, safer for the accidental click.
+
+```tsx
+"use client";
+
+import { toast } from "sonner";
+
+const UNDO_WINDOW_MS = 5000; // the toast's life IS the confirmation window
+
+// `removeRow` = optimistic local removal; `restoreRow` = put it back on Undo;
+// `commitDelete` = the real, irreversible server call fired only on expiry.
+export function deleteWithUndo(row: { id: string; name: string }, api: {
+  removeRow: (id: string) => void;
+  restoreRow: (row: { id: string; name: string }) => void;
+  commitDelete: (id: string) => Promise<void>;
+}) {
+  api.removeRow(row.id); // 1. gone from the UI *now* — no dialog, no wait
+
+  let undone = false;
+  // 2. commit the server delete when the window closes, unless undone.
+  const commit = setTimeout(async () => {
+    if (undone) return;
+    try {
+      await api.commitDelete(row.id);
+    } catch {
+      api.restoreRow(row); // server rejected → put it back, tell the user
+      toast.error(`Couldn't delete "${row.name}". It's back in the list.`);
+    }
+  }, UNDO_WINDOW_MS);
+
+  // 3. the toast carries the only affordance — its duration matches the window.
+  toast(`Deleted "${row.name}"`, {
+    duration: UNDO_WINDOW_MS,
+    action: {
+      label: "Undo",
+      onClick: () => {
+        undone = true;
+        clearTimeout(commit);
+        api.restoreRow(row); // 4. cancel the pending commit, restore the row
+      },
+    },
+  });
+}
+```
+
+Keep `<Toaster />` mounted once at the root. **Do not** pair this with an `AlertDialog` —
+the toast *is* the safety net; adding a confirm on top reintroduces the friction this
+pattern exists to remove. Escalate to `AlertDialog` (Variant B) only when the delete is
+genuinely irreversible or account-level (nothing to undo).
 
 ---
 
@@ -864,6 +952,14 @@ The tells that mark an overlay as generated-not-crafted — and the fix:
 - **Trapping the user.** A dialog with no X, no Escape, no outside-click, no Cancel
   is hostile — *unless* it's an `AlertDialog`, where removing outside-click is the
   intentional friction. Know which one you're building.
+- **A confirm dialog on a reversible delete.** "Are you sure?" on every single-row
+  delete trains mindless dismissal and protects no one. Optimistic-remove + a Sonner
+  **Undo** toast (§5 Bonus) is faster and safer; save `AlertDialog` for irreversible /
+  account-level ops. → motion.md §6 (UNDO-OVER-CONFIRM).
+- **Optimistic "success" on money or irreversible writes.** Flip local state instantly
+  for likes/follows/stars, but a checkout / delete / publish keeps a **real** pending
+  state — a fake success that later reverses is a trust break. → motion.md §6
+  (OPTIMISTIC-UI-EXCEPT-MONEY).
 - **Stacked / nested modals.** A modal opening a modal opening a modal is a flow
   smell. The only sanctioned nesting is a single discard/confirm `AlertDialog`.
 - **Dumping a whole page into a dialog.** Multi-section, heavily-scrolling content
@@ -890,7 +986,9 @@ The tells that mark an overlay as generated-not-crafted — and the fix:
    lightened + blurred.
 4. **Design every state** — submitting keeps-open + disabled primary + blocked
    exits; inline field errors + polite form-error region; success → toast;
-   destructive → AlertDialog (+ type-to-confirm for high stakes); guarded close.
+   destructive → **reversible = optimistic-remove + Undo toast (no dialog)**,
+   irreversible = AlertDialog (+ type-to-confirm for high stakes); optimistic only
+   where you can silently roll back (never money); guarded close.
 5. **Go responsive** — swap Dialog ↔ Drawer at `sm`; footer stacks reversed +
    full-width; `dvh` height; `overscroll-contain` body.
 6. **A11y** — focus trap, correct initial focus (Cancel for destructive), return

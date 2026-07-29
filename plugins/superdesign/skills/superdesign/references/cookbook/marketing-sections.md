@@ -4,6 +4,21 @@
 > landing page. Built with **React + Tailwind v4 (CSS-first) + shadcn/ui**. Token-driven,
 > accessible, and shaped so hierarchy is encoded in *size and placement* — not just copy.
 
+## Contents
+
+- [1. When to use it](#1-when-to-use-it) — the four questions a visitor asks after the hero, one per section
+- [2. Anatomy (layout structure)](#2-anatomy-layout-structure) — the shared section shell, the bento grid, and the other three
+- [3. Token-driven styling (CSS vars, not hardcoded hex)](#3-token-driven-styling-css-vars-not-hardcoded-hex) — semantic tokens plus the marquee tokens and keyframes
+- [4. Variants](#4-variants) — bento feature grid · testimonial marquee (behind an evidence gate) · logo cloud
+- [5. Interaction / state matrix](#5-interaction--state-matrix) — every surface across all four sections
+- [6. Responsive behavior](#6-responsive-behavior) — reset ALL grid spans below 768px
+- [7. Accessibility notes](#7-accessibility-notes) — section landmarks, and why `grid-auto-flow: dense` is banned on interactive tiles
+- [8. Anti-slop callout](#8-anti-slop-callout) — the one failure mode: a uniform grid of equal cards
+- [9. Complete, copy-pasteable code](#9-complete-copy-pasteable-code) — shared header, marquee primitive, all three variants, skeleton, composed page
+- [10. Ship checklist](#10-ship-checklist) — the pre-ship boxes
+- [11. Scroll narrative](#11-scroll-narrative) — native scroll by default, and the measured case against smooth-scroll libraries
+- [12. WebGL / 3D — what earns it](#12-webgl--3d--what-earns-it) — 4 of 13 sites, ambient background only
+
 ---
 
 ## 1. When to use it
@@ -13,7 +28,7 @@ in sequence. Each section answers exactly one:
 
 | Section | Question it answers | Density | Motion | Where it goes |
 |---|---|---|---|---|
-| **Logo cloud** | "Who else trusts this?" | low (6–15 marks) | none / slow marquee | directly under hero |
+| **Logo cloud** | "Who else trusts this?" | low (6–36 marks, median 11) | none / slow marquee | directly under hero, ~0.9 screens down |
 | **Feature section** | "What does it do?" | medium (3–6 items) | subtle on-scroll reveal | after logos |
 | **Bento grid** | "Why is it *better*?" (parallel props) | high (5–9 cells) | hover lift, in-cell demos | primary feature slot |
 | **Testimonials** | "Do real people love it?" | high wall / low spotlight | marquee / carousel | near pricing + CTAs |
@@ -45,6 +60,17 @@ Every section uses the same outer rhythm so edges align down the page:
     <content grid / track>
 ```
 
+**Page rhythm, measured.** Median page = **11.2 viewports tall** across 13 leading software
+marketing sites (range 5.9–17.4). Median top-level section count = **8** (range 3–15). That puts
+the **median section at ~1.4 viewports**. Use it as a governor: under **0.8** viewports a section
+is a fragment and should merge with its neighbour; over **2.5** it needs an internal heading.
+
+And rank ruthlessly. NN/g eyetracking (130k fixations, 120 participants) puts **57% of viewing
+time above the fold and 74% inside the first two screenfuls**, with only 26% spread across
+everything after ([NN/g](https://www.nngroup.com/articles/scrolling-and-attention/)). Screens 3+
+are elaboration; nothing required to convert may live there alone, and the primary CTA must
+repeat at the bottom.
+
 ### 2b. Bento grid (the flagship)
 
 ```
@@ -70,7 +96,13 @@ Rules that make it read as a bento and not a card wall:
 
 ### 2c. The other three, in one line each
 
-- **Logo cloud** — `grid` of capped-height SVGs, `grayscale opacity-60` by default, eyebrow above.
+- **Logo cloud** — `grid` of capped-height marks at **full colour and full opacity**, eyebrow
+  above. Measured across 12 sites: **grayscale on 0 of them, `opacity: 1` on all of them.**
+  `grayscale opacity-60` is a 2021 Tailwind-UI convention this tier has left. Cap **height**
+  (`h-8`/`h-10`), never a box. **6–36 marks; median 11** — above ~20 the strip reads as a
+  deliberate *wall* (Stripe 36, Vercel 21) and should be full-bleed; below ~12 it reads as a row
+  and should be centred in the container. If a mark is illegible at `h-8` in dark mode, supply a
+  light variant — do not reach for grayscale to hide the problem.
 - **Feature grid** — three-column `icon → heading → body → "Learn more →"`, icon in a tinted rounded square.
 - **Testimonials** — cards of `quote → avatar + name + role@company`, in a wall, a masonry column set, or a dual-row marquee.
 
@@ -125,15 +157,25 @@ never a fixed box — logos have wildly different aspect ratios).
 
 ### Variant A — Bento feature grid (primary)
 One 2×2 anchor with a live mini-chart, two wide tiles, two fill tiles. This is the default
-"why we're better" slot. Full code in §8.
+"why we're better" slot. Full code in §9.
 
-### Variant B — Testimonial marquee (dual-row)
-Headline + subhead over two independent marquee rows scrolling in **opposite directions**,
-each with edge fade masks and pause-on-hover. The trendy default when you have volume. Code in §8.
+### Variant B — Testimonial marquee (dual-row), behind an evidence gate
+Headline + subhead over two independent marquee rows scrolling in **opposite directions**, each
+with edge fade masks and pause-on-hover. Code in §9.
+
+**This is not the default.** A marquee shows each card only a fraction of the time, and that is
+the documented failure mode of auto-forwarding content: Nielsen's study found a self-rotating
+panel showed its content "only **20%** of the time" and that users "assume that it might be an
+advertisement, which makes them more likely to ignore it"
+([NN/g](https://www.nngroup.com/articles/auto-forwarding/)). A marquee is a carousel with better
+manners, not a different pattern. Ship one only when **all three** hold: (a) `pauseOnHover` is
+on, (b) the same quotes are reachable as a static list or via a "read all" link, (c) no quote
+carries information the visitor needs to convert. If a quote is load-bearing, put it in a static
+spotlight card. **Default to a static 3-column wall.**
 
 ### Variant C — Logo cloud (static grid)
-Capped-height grayscale SVGs, `grayscale opacity-60 hover:opacity-100 hover:grayscale-0`, eyebrow
-above. Swap to the same `Marquee` primitive from Variant B when you have many logos. Code in §8.
+Capped-height marks at full colour and full opacity, eyebrow above. Swap to the same `Marquee`
+primitive from Variant B when you have many logos. Code in §9.
 
 ---
 
@@ -141,8 +183,8 @@ above. Swap to the same `Marquee` primitive from Variant B when you have many lo
 
 | State | Bento tile | Feature card | Logo | Testimonial card | Marquee |
 |---|---|---|---|---|---|
-| **default** | resting `bg-card`, hairline border | flat | `grayscale opacity-60` | resting card | scrolling |
-| **hover** | lift `hover:shadow-lg`, border brightens, in-tile demo plays | icon/link → `text-primary`, subtle bg | → full color, 100% opacity | border/bg lift | pause (`group-hover:[animation-play-state:paused]`) |
+| **default** | resting `bg-card`, hairline border | flat | full colour, `opacity: 1` | resting card | scrolling |
+| **hover** | lift `hover:shadow-lg`, border brightens, in-tile demo plays | icon/link → `text-primary`, subtle bg | no change — it is already at full strength | border/bg lift | pause (`group-hover:[animation-play-state:paused]`) |
 | **focus-visible** | `ring-2 ring-ring` on interactive tiles; **keep DOM order** | ring on link | ring on linked logo | ring | n/a |
 | **active/press** | scale `active:scale-[0.99]` | link press | — | — | — |
 | **loading** | `Skeleton` block per tile | skeleton | skeleton logo | skeleton avatar + 2 lines | n/a |
@@ -202,7 +244,8 @@ Ship / avoid:
 - ❌ Radius < 16px → ✅ `rounded-3xl`; the "tray" feel is the whole point.
 - ❌ Static screenshot in the anchor → ✅ a live mini-UI / chart / looping demo.
 - ❌ Testimonial headline = "Great product!" → ✅ headline = a **quantified outcome** ("Cut onboarding 60%").
-- ❌ 40+ full-color logos at random sizes → ✅ 6–15, grayscale, **height-capped** (not boxed).
+- ❌ 40+ full-color logos at random sizes → ✅ **6–36, height-capped, full colour, one consistent optical weight** (not boxed, not grayscale).
+- ❌ A marquee as the default testimonial layout → ✅ a **static 3-column wall**; the marquee only clears the three-part gate in Variant B.
 - ❌ Marquee too fast / no pause / ignores reduced-motion → ✅ 40s, `pauseOnHover`, `motion-safe` gated.
 - ❌ `grid-auto-flow: dense` on interactive tiles → ✅ dense only for non-interactive media.
 - ❌ 4+ bento sections on one page → ✅ **2–3 max**; alternate density for rhythm.
@@ -685,7 +728,9 @@ export function LogoCloud({ logos }: LogoCloudProps) {
                 width={120}
                 height={40}
                 // Cap HEIGHT, never a fixed box — logos have different aspect ratios.
-                className="h-8 w-auto opacity-60 grayscale transition duration-200 hover:opacity-100 hover:grayscale-0 motion-reduce:transition-none"
+                // Full colour, full opacity: measured on 12 leading sites, 0 grayscale.
+                // If a mark dies in dark mode, ship a light variant — not a filter.
+                className="h-8 w-auto"
               />
             </div>
           ))}
@@ -753,9 +798,121 @@ export default function Page() {
 - [ ] Anchor holds a live visual (chart/mini-UI), not a static PNG.
 - [ ] All grid spans **reset** at the mobile breakpoint (no 8–12 equal stacked cards).
 - [ ] Zero hex literals — everything on `--card` / `--primary` / `--muted-foreground` / `--ring` / `--border`.
-- [ ] Marquee: dual rows, opposite directions, `pauseOnHover`, `motion-safe` gated, clones `aria-hidden`, fade masks `pointer-events-none`.
-- [ ] Logos: 6–15, grayscale, height-capped, real `alt`, dark-mode variants where needed.
+- [ ] Marquee only if it clears the three-part gate (§4 Variant B); otherwise a static wall. If shipped: dual rows, opposite directions, `pauseOnHover`, `motion-safe` gated, clones `aria-hidden`, fade masks `pointer-events-none`.
+- [ ] Logos: 6–36, **full colour, full opacity**, height-capped, real `alt`, light variants for dark mode where needed.
+- [ ] Section rhythm: every section 0.8–2.5 viewports; the primary CTA repeats at the bottom of the page.
 - [ ] Testimonials lead with a **quantified outcome**; real name + role + company + headshot; `<blockquote>`/`<figcaption>`.
 - [ ] Every interactive element shows `focus-visible:ring-2 ring-ring`; DOM order == visual order (no `grid-auto-flow: dense` on interactive tiles).
 - [ ] Section landmarks via `aria-labelledby`; text-over-image has a scrim + verified 4.5:1 contrast.
 - [ ] **2–3 bento sections max** per page; alternate density for rhythm.
+
+---
+
+## 11. Scroll narrative
+
+**Default: native scroll.** Measured on 13 leading software marketing sites — **0 of 13 ship
+Lenis, locomotive-scroll, or GSAP.** Smooth-scroll libraries are an award-portfolio convention
+(darkroom.engineering maintains Lenis and lists it in its own stack), not a product-marketing
+convention. Two of the 13 set `scroll-behavior: smooth` in CSS; that is the native one-liner and
+it is enough.
+
+**Reveals.** `IntersectionObserver`'s default `threshold` is **0**, which fires before a single
+pixel is visible — the commonest reveal bug, and it reads as "already animated". Use one of:
+
+```js
+new IntersectionObserver(onReveal, { threshold: 0.25 });                             // quarter visible
+new IntersectionObserver(onReveal, { threshold: 0, rootMargin: "0px 0px -15% 0px" }); // 15% up from bottom
+```
+
+Unobserve on first fire. Never pass a threshold array for a one-shot reveal — arrays exist for
+progress tracking, and each extra threshold is another callback per element per scroll.
+
+**CSS-only alternative, progressive enhancement only.** `animation-timeline` / `view-timeline`
+are **not Baseline** — MDN: "This feature is not Baseline because it does not work in some of the
+most widely-used browsers." The page must be finished without it.
+
+```css
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal { animation: reveal linear both; animation-timeline: view();
+              animation-range: entry 15% cover 35%; }
+  }
+}
+@keyframes reveal { from { opacity: 0; transform: translateY(1rem); } }
+```
+
+**Sticky stacks.** A sticky element sticks to its nearest ancestor with a scrolling mechanism
+(`overflow: hidden | scroll | auto | overlay`) "even if that ancestor isn't the nearest actually
+scrolling ancestor" (MDN) — an `overflow-hidden` wrapper silently kills sticky. Add
+`will-change: transform` to sticky content; MDN names the repaint cost and that remedy. Measured
+sticky counts in this tier: **0 on 5 of 13 sites, 1–2 on 6**, and only Liveblocks (14) and Cursor
+(6) run a real sticky narrative. A sticky stack is a deliberate choice, not a default.
+
+**Parallax budget.**
+
+| Effect | Budget |
+|---|---|
+| Parallax translate range | ≤ **8%** of the element's own height, one direction of travel per section |
+| Speed differential between layers | ≤ **0.15×** scroll velocity |
+| Scroll-linked motion | strictly linked to scroll *position* — never time-based while scrolling |
+| Full-viewport wipes / zooms | don't |
+| `opacity`, `color`, `filter: blur()` | unbudgeted |
+
+The mechanism, from A List Apart's vestibular piece: motion "across a large amount of space"
+relative to the viewport is the trigger, while animation "that involves only non-moving
+properties, like opacity, color, and blurs" is "unlikely to be problematic". Affected population,
+per vestibular.org: ~**8 million** US adults with a chronic balance problem plus **2.4 million**
+with chronic dizziness.
+
+**Animate `transform` and `opacity` only.** They are the only two properties the compositor
+handles alone (web.dev). The same animation on `top`/`left` drops **50% of frames**; on
+`transform`, **1%**. Aim for **4–5 ms** of compositing per frame during scroll.
+
+**If you do ship Lenis** (v1.3.25): it has **no reduced-motion option** among its 23 settings, so
+you must not instantiate it — `lenis.destroy()` on a `matchMedia` change. It also **breaks anchor
+links by default** (`anchors: true` required) and traps modal scroll unless you set
+`data-lenis-prevent`. Awwwards weights Usability at **30%**; each of these is a direct deduction.
+
+**If you also use GSAP ScrollTrigger:** never nest a scrubbed trigger inside a timeline; create
+pinned triggers in scroll order (or set `refreshPriority`); make viewport-dependent `start`/`end`
+values *functions* with `invalidateOnRefresh: true`; and **remove `scroll-behavior: smooth` from
+`<html>`** — GSAP's own docs say it breaks refresh calculations, and Bootstrap 5.x sets it by
+default (`scroll-behavior: auto !important` to override).
+
+---
+
+## 12. WebGL / 3D — what earns it
+
+Measured: **4 of 13** leading software marketing sites run a WebGL context, and every one of them
+uses it for a **single ambient background behind the headline** — never a navigable 3D object.
+Nine ship zero and are not worse for it: Linear serves a 348 kB page with a 64px headline and a
+static screenshot, and is the most-emulated site in the category.
+
+| Constraint | Value |
+|---|---|
+| WebGL contexts per page | **≤ 1** |
+| Draw calls | ≤ **300** target, **1000** hard ceiling (r3f: "no more than 1000 as the very maximum, and optimally a few hundred or less") |
+| Frameloop | `<Canvas frameloop="demand">` unless something is genuinely always moving |
+| Mobile / weak GPU | `<PerformanceMonitor onIncline={() => setDpr(2)} onDecline={() => setDpr(1)}>` starting at 1.5, or `performance={{ min: 0.5 }}` + `regress()` |
+| `prefers-reduced-motion: reduce` | do **not** mount the Canvas — render the poster |
+| Fallback | a real `<img>` in the same DOM at the canvas's exact aspect ratio (Stripe ships `wave-fallback-desktop.png` at 1392px next to its two canvases) |
+| Total page transfer with WebGL | ≤ **3 MB** |
+
+Construction cost is real: creating 510 `TextGeometry` instances at once "will cause
+approximately **1.5 seconds of pure jank** (Apple M1)" — distribute the work
+([r3f scaling-performance](https://docs.pmnd.rs/react-three-fiber/advanced/scaling-performance)).
+
+**Split-text display headlines** — the studio-tier signature — must keep an accessible copy, and
+must split by **word**, not character:
+
+```tsx
+<h1><span className="sr-only">{headline}</span>
+  <span aria-hidden className="inline-flex flex-wrap">
+    {headline.split(" ").map((w, i) => (
+      <span key={i} className="mr-[0.25em] motion-safe:animate-[rise_.6s_var(--ease)_both]"
+            style={{ animationDelay: `${i * 40}ms` }}>{w}</span>))}
+  </span></h1>
+```
+
+Without it, antinomy.studio's headline reaches a text client as
+`Antinomyisanindependentcreativestudio…` and darkroom.engineering's as `WhereThingsGetDeveloped`.

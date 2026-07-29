@@ -2,6 +2,18 @@
 
 > A sticky, full-bleed marketing header: logo left, primary nav (with dropdown + mega-menu panels) in the middle, low-emphasis "Sign in" + high-emphasis CTA on the right, and a mobile hamburger that opens a `Sheet` with the panels re-expressed as an `Accordion`. Built on shadcn/ui `NavigationMenu` (Radix) so keyboard, focus, and ARIA come for free. React + Tailwind v4. The kind Linear/Vercel/Stripe ship: slim chrome, frosted-on-scroll, monochrome + one accent, real links everywhere, restrained motion.
 
+## Contents
+
+- [When to use it](#when-to-use-it) — the persistent bar carrying brand, wayfinding and conversion; dropdown vs mega menu
+- [Anatomy](#anatomy) — skip link, sticky inner bar, panels
+- [Token-driven styling](#token-driven-styling) — the token layer plus the header's own two additions
+- [Variants](#variants) — solid sticky frosted (default) · transparent-over-hero → frosted on scroll
+- [Interaction / state matrix](#interaction--state-matrix) — every surface; every state has more contrast than rest
+- [Responsive behavior](#responsive-behavior) — `md` is the breakpoint; the mega menu becomes an Accordion in the drawer
+- [Accessibility](#accessibility) — real links, the Radix keyboard model, always-visible focus
+- [Anti-slop callout](#anti-slop-callout) — too many top-level items, hover-only menus, and the rest
+- [Complete code](#complete-code) — `SiteHeader` with NavigationMenu + Sheet + Accordion
+
 ---
 
 ## When to use it
@@ -50,6 +62,12 @@ MobileNav (Sheet, side="left")
 
 Load-bearing ordering: **CTA is always the last thing on the right.** Users look to the end of the bar for the action; moving it between pages is disorienting. "Sign in" sits immediately left of it as the quiet sibling.
 
+**When the hero has no button, the header CTA is the whole conversion surface.** Linear ships
+**zero** buttons in its hero — a 64px headline, an 11-word subhead, a product screenshot, one
+text link — and delegates every conversion to the persistent header. If you copy that restraint,
+the header CTA becomes load-bearing: filled, present at **every** scroll position, **≥ 44 px tall
+at 390**, and never collapsed into the hamburger.
+
 Radix `NavigationMenu` deliberately **does not** use `role="menu"/"menubar"` — those are for app/OS-style composite-focus menus and confuse users on a website. This is semantic navigation: `<header>` → `<nav>` → list of real links. Don't force `role="menu"` onto it.
 
 ---
@@ -71,7 +89,7 @@ Everything maps to shadcn/ui CSS variables — **no hardcoded hex**. Light and d
   --primary-foreground: oklch(0.985 0 0);
   --border: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
+  --radius: 0.5rem;   /* 8px — required brand-step output, never a default (→ tokens.md §6) */
 
   /* header-specific */
   --header-height: 4rem;                 /* keep in sync with h-16 on the inner bar   */

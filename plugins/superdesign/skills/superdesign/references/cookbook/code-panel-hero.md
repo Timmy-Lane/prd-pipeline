@@ -5,13 +5,23 @@ Stripe docs). The hero visual is a *real, syntax-highlighted code snippet* — i
 ("the product is code") and as instant docs. Pairs with a copyable install-command pill and
 credential badges.
 
+## Contents
+
+- [When to use](#when-to-use) — dev tools, APIs, SDKs; the conversion is "a developer tries the snippet"
+- [When NOT to use](#when-not-to-use) — non-technical audiences; never stack hero visuals
+- [Anatomy](#anatomy) — copy left, code panel right: window chrome, language tabs, copy button
+- [Code (React + Tailwind v4 + shadcn/ui)](#code-react--tailwind-v4--shadcnui) — Tabs + install pill; highlight at build time, never on the hot path
+- [States](#states) — install pill copy → copied, tab selection, focus
+- [Accessibility](#accessibility) — real `<pre><code>`, labelled copy buttons, decorative chrome
+- [Anti-slop](#anti-slop) — one texture, mono only where it belongs
+
 ## When to use
 - Developer tools, APIs, SDKs, AI/agent infra, databases, DX products, technical docs marketing.
 - The primary conversion is "a developer tries the snippet."
 
 ## When NOT to use
 - Consumer/lifestyle/non-technical audiences — a code panel reads as noise, not proof. Use a
-  product screenshot (`cookbook/hero.md`) or illustration instead.
+  product screenshot (`references/cookbook/hero.md`) or illustration instead.
 - Don't stack a code panel AND a product screenshot AND an illustration — one hero visual.
 
 ## Anatomy

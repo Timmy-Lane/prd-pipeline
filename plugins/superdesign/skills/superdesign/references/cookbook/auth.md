@@ -3,6 +3,19 @@
 > Category: `auth` · Stack: React + Tailwind v4 + shadcn/ui
 > The one card the user meets before they trust you. Make it feel inevitable.
 
+## Contents
+
+- [When to use it](#when-to-use-it) — sign in / sign up / magic-link / OTP / SSO / reset, and what to reach for instead
+- [Anatomy](#anatomy) — the canonical sign-in card top → bottom, in the order that scans
+- [Token-driven styling](#token-driven-styling) — the surface → token map and the variables the recipe assumes
+- [Variants](#variants) — centered card · split screen with cover · email-first multi-step
+- [State matrix](#state-matrix) — every state each interactive element ships, not just the happy path
+- [Responsive behavior](#responsive-behavior) — `min-h-svh`, card width caps, how the split collapses
+- [Accessibility](#accessibility) — real `<label htmlFor>`, `autoComplete`, error wiring
+- [Anti-slop callout](#anti-slop-callout) — the tells that mark an auth screen as generated, and the fix
+- [Complete example](#complete-example) — drop-in `LoginForm` + page, plus the sign-up delta
+- [Quick checklist before you ship](#quick-checklist-before-you-ship) — the pre-ship boxes
+
 ---
 
 ## When to use it
@@ -116,7 +129,7 @@ self-contained). Tailwind v4 wires them in the `@theme inline` block of `globals
   --border: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --radius: 0.625rem;
+  --radius: 0.5rem;   /* 8px — required brand-step output, never a default (→ tokens.md §6) */
 }
 .dark {
   --background: oklch(0.145 0 0);

@@ -4,6 +4,20 @@
 **Stack:** React + Tailwind v4 + shadcn/ui
 **Primitives:** `sidebar`, `breadcrumb`, `dropdown-menu`, `separator`, `tooltip`, `command`, `dialog`, `avatar`, `skeleton`, `button`, `input`
 
+## Contents
+
+- [When to use it](#when-to-use-it) — the authenticated frame, and when a shell is overkill
+- [Anatomy](#anatomy) — sidebar column + sticky topbar over a scrollable main
+- [Token-driven styling](#token-driven-styling) — the `sidebar` token namespace that dims the chrome behind the content
+- [Variants](#variants) — inset + icon-collapse (default) and the alternatives
+- [Interaction & state matrix](#interaction--state-matrix) — sidebar, topbar and content states
+- [Responsive behavior](#responsive-behavior) — persistent rail ≥ `md`, Sheet off-canvas below it
+- [Accessibility notes](#accessibility-notes) — landmarks, ⌘B / ⌘K, `aria-current`, skip link
+- [Anti-slop callout](#anti-slop-callout) — the loud over-nested sidebar, and how to dim it
+- [Complete code example](#complete-code-example) — six files: sidebar → nav → switcher → user menu → palette → layout
+- [Sources](#sources)
+- [Corpus grounding — app navigation & sidebars (2026-07-05 research)](#corpus-grounding--app-navigation--sidebars-2026-07-05-research) — copyable rules with values, attribution kept straight
+
 ---
 
 ## When to use it
@@ -72,7 +86,7 @@ Everything is driven by CSS variables — **no hardcoded hex in components**. sh
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.625rem;
+  --radius: 0.5rem;   /* 8px — required brand-step output, never a default (→ tokens.md §6) */
 
   --background: oklch(1 0 0);
   --foreground: oklch(0.205 0.006 240);
@@ -225,6 +239,25 @@ Other axes: `side="right"` for a secondary contextual/inspector panel (keep left
 - **Current page:** mark the active item with `aria-current="page"` (not color alone).
 - **Icon-only rail:** collapsed items **must** carry an accessible name — a `SidebarMenuButton` tooltip plus `aria-label`. Never ship icon-only with no name.
 - **Focus rings:** always visible via `--sidebar-ring` — don't remove outlines.
+- **The sticky topbar must not eat the focused element.** SC 2.4.11 Focus Not Obscured (**AA**):
+  "When a user interface component receives keyboard focus, the component is not entirely hidden
+  due to author-created content." A 64px `sticky top-0` bar will cover a row the browser scrolls
+  to the top. Fix it once on `<main>` with `scroll-pt-16` (and `scroll-pt-12` when the rail is
+  icon-collapsed) — technique C43, shown in the layout below.
+- **Focus restore is a contract, not a nicety.** Closing a right-hand inspector/panel must return
+  focus to the element that opened it; a route change moves focus to the `<main>` heading, never
+  leaving it on a now-unmounted nav item.
+- **Announce async shell changes without stealing focus.** SC 4.1.3 Status Messages (**AA**)
+  requires status messages be presentable "without receiving focus", via `role="status"` /
+  `role="alert"` / `role="log"`. A toast that moves focus is a conformance failure, not just rude.
+- **Reflow permits a horizontally-scrolling table.** SC 1.4.10 (**AA**) forbids 2-D scrolling at
+  320 CSS px but explicitly exempts "data tables (not individual cells)" — so `overflow-x-auto`
+  on a wide grid is conformant, and swapping to a stacked card list below 640px is a usability
+  choice, not an obligation.
+- **Single-letter shortcuts are SC 2.1.4 (Level A).** `J`/`K`/`X` and the single-letter object
+  actions must be turn-off-able, remappable, **or** "only active when that component has focus".
+  Take the third: bind them on the list/grid container's `onKeyDown`, never on `document`. `⌘B`
+  and `⌘K` carry a modifier and are out of scope.
 - **Motion:** respect `prefers-reduced-motion` for collapse/expand and view transitions.
 - **RTL:** use logical properties / `dir` so the whole shell mirrors.
 
@@ -839,9 +872,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
+        {/* Sticky topbar is h-16 (64px), shrinking to h-12 (48px) when the rail is
+            icon-collapsed. scroll-padding-top keeps a focused row from landing underneath
+            it — WCAG 2.4.11 Focus Not Obscured (AA), technique C43. */}
         <main
           id="main-content"
-          className="flex flex-1 flex-col gap-6 p-4 md:p-6"
+          className="flex flex-1 flex-col gap-6 p-4 md:p-6 scroll-pt-16 group-has-data-[collapsible=icon]/sidebar-wrapper:scroll-pt-12"
         >
           <div className="mx-auto w-full max-w-6xl">
             {/* Page header row */}
@@ -896,3 +932,52 @@ function OverviewSkeleton() {
 - 925studios, Linear design breakdown — https://www.925studios.co/blog/linear-design-breakdown-saas-ui-2026
 - Vercel, new dashboard — https://vercel.com/try/new-dashboard
 - shadcn inset overflow gotcha — https://github.com/shadcn-ui/ui/issues/7947
+- WCAG 2.2 — 2.4.11 Focus Not Obscured (Minimum) — https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html
+- WCAG 2.2 — 4.1.3 Status Messages — https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html
+- WCAG 2.2 — 1.4.10 Reflow — https://www.w3.org/WAI/WCAG22/Understanding/reflow.html
+- WCAG 2.2 — 2.1.4 Character Key Shortcuts — https://www.w3.org/WAI/WCAG22/Understanding/character-key-shortcuts.html
+
+> **Provenance rule.** Flagship products publish *philosophy*; libraries, design systems,
+> browser vendors and W3C publish *numbers*. Never attribute a px or ms value to Linear,
+> Superhuman, Figma or Arc unless the value appears in their own page text. Specifically:
+> `linear.app/blog/scaling-the-linear-sync-engine` is a **video wrapper** — its only prose is
+> "In this video we cover the challenges we've had scaling the sync engine…" — so cite it for
+> the *architecture* (local store, optimistic mutation, background sync) and never for a
+> number. The `G`+letter navigation map below is **third-party-observed**, not from Linear's docs.
+
+---
+
+## Corpus grounding — app navigation & sidebars (2026-07-05 research)
+
+Additive appendix. The recipe above stands as-is; this section grounds it in the research corpus's copyable rules and specific values so the build has hard numbers behind it. Source: `docs/research/notes/product-app-ui-patterns.md`, section **"Dashboard shell & app navigation/sidebars."** Confidence flags from the corpus are preserved verbatim — treat anything marked `[reconstructed]`, `[directional]`, or ⚠️ as a starting point to verify against your shipped version, not gospel.
+
+**One framing to keep straight:** most of the hard values below come from **shadcn/ui source + Vercel Geist**, not from Linear. Where the corpus attributes something to Linear it's *qualitative philosophy* (dim the chrome, personalize the sidebar) or *third-party-observed* shortcuts — don't relabel shadcn/Geist tokens as "what Linear does."
+
+### Copyable rules (with values)
+
+- **Sidebar widths** — expanded `16rem`/256px, collapsed icon-rail `3rem`/48px, mobile off-canvas sheet `18rem`/288px. Cross-product band: expanded **240–300px**, collapsed **48–64px**. *Source: [shadcn Sidebar](https://ui.shadcn.com/docs/components/sidebar) (primary).* ⚠️ The collapsed-rail width is **inconsistent across shadcn releases** — `3rem` in the current registry vs `4rem`/64px in some React releases; **confirm against your shipped version** (medium confidence). Arc's reconstructed 240px/48px matches the band but is a third-party teardown `[directional]`.
+- **Collapse to an icon rail, never fully hide** — keep the expand toggle and icon affordances reachable without a hidden gesture. Reinforces the recipe's `collapsible="icon"` default. *Source: shadcn (primary).*
+- **Single global collapse shortcut** — reuse VS Code's `Cmd/Ctrl+B` for muscle-memory transfer, backed by redundant pointer affordances (border-drag via `SidebarRail`, icon click) plus a palette entry. Notion uses `Cmd/Ctrl+\`. *Sources: [shadcn](https://ui.shadcn.com/docs/components/sidebar), [Notion](https://www.notion.com/help/navigate-with-the-sidebar) (primary).*
+- **Collapse = a short LINEAR width+position transition, not a spring** — `transition-[left,right,width] duration-200 ease-linear`. Structural chrome reads mechanical; a bouncy/ease-out collapse is a slop tell. *Source: [shadcn sidebar.tsx](https://raw.githubusercontent.com/shadcn-ui/ui/main/apps/v4/registry/new-york-v4/ui/sidebar.tsx) (primary).*
+- **The sidebar gets its OWN dimmer token layer** — lower-contrast than the canvas; a **neutral accent fill** (not brand color) for hover/active, brand hue reserved for the focus ring. shadcn's HSL values: `--sidebar-background 0 0% 98%` (light) / `240 5.9% 10%` (dark); `--sidebar-accent 240 4.8% 95.9%`; `--sidebar-ring 217.2 91.2% 59.8%`. *Source: shadcn (primary).* ⚠️ Do **not** cite supabase-design-system.vercel.app as corroboration — it's an unofficial community demo that inherited shadcn's tokens, not an independent Supabase decision. (These are the same values the recipe's OKLCH sidebar namespace expresses; keep hue tinted toward brand, never pure `C=0`.)
+- **Desaturate/dim the whole chrome and strip decorative color chips** — remove colored icon-background chips; scale inactive icons down/muted. *Source: [linear.app/now](https://linear.app/now/behind-the-latest-design-refresh) (primary, qualitative only).* The "a few notches dimmer" phrasing is unquantified — no opacity/luminance delta is published, so treat the direction as copyable but the magnitude as your call.
+- **Two-layer focus ring** (bg gap + colored stroke) — `box-shadow: 0 0 0 2px var(--background), 0 0 0 4px #006bff`. Stays visible on both light and colored nav backgrounds, where a one-layer outline vanishes. *Source: [vercel.com/design.md](https://vercel.com/design.md) (primary).*
+- **Radius signals permanence** — `6px` everyday chrome (nav rows, buttons), `12px` menus/modals, `16px` fullscreen surfaces, `9999px` pills/avatars. *Source: vercel.com/design.md (primary).*
+- **Keyboard navigation via `G`+letter chords + single-letter object actions + `?` overlay** — two-key `G`+letter for destinations (so they scale without alphabet collisions), single letters for object actions, `J/K` or arrows to move selection. Linear's observed map: `G I`=Inbox, `G M`=My Issues, `G T`=Triage, `G A`=Active, `G B`=Backlog, `G C`=Cycles, `G P`=Projects, `G S`=Settings. ⚠️ These exact bindings are **third-party-observed** (shortcutfoo.com, shortcut.fyi), **not Linear's own docs** — verify against the in-app `?` panel and treat the letters as illustrative. `?` opening a searchable shortcut overlay anywhere is primary: *[Linear changelog](https://linear.app/changelog/2021-03-25-keyboard-shortcuts-help).*
+- **Personalizable sidebar, one drag gesture** — drag-to-reorder and drag-to-nest share a single gesture: **drop-between = reorder, drop-onto = nest**, no separate "move to" modal; support hide/pin/reorder rows. *Sources: [Linear](https://linear.app/changelog/2024-12-18-personalized-sidebar), [Notion](https://www.notion.com/help/navigate-with-the-sidebar) (primary).*
+- **Hover-revealed row affordances, full-row click target** — Notion reveals `+` (create child) and `•••` (menu) on the right edge on hover; icons hidden at rest. *Source: Notion (primary).*
+- **Persist collapse state in a cookie** — `sidebar_state`, 7-day max-age, read server-side to avoid a hydration flash. z-stack: container `z-10`, resize rail `z-20`. This is exactly what shadcn's `SidebarProvider` does out of the box (the recipe already relies on it). *Source: [shadcn sidebar.tsx](https://raw.githubusercontent.com/shadcn-ui/ui/main/apps/v4/registry/new-york-v4/ui/sidebar.tsx) (primary).*
+- **Prefer a resizable/hideable vertical sidebar over horizontal top-tabs** — frame team↔project scope switching as *staying on the same page at a different scope* (one click), not a nav reset. *Source: [Vercel changelog](https://vercel.com/changelog/dashboard-navigation-redesign-rollout) (primary; full default rollout **2026-02-26**).* Vercel's mobile abandons the rail for a floating bottom bar for one-handed reach.
+- **Compress top-level entries + auto Pinned (curated) + Recent (auto) lists** so common workflows are reachable without scrolling a long flat list. *Source: [Stripe May 2024](https://support.stripe.com/questions/dashboard-update-may-2024) `[directional]`.*
+
+### Token / motion defaults (the corpus's dashboard block)
+
+- `--sidebar-width: 16rem` / `--sidebar-width-mobile: 18rem` / `--sidebar-width-icon: 3rem` (⚠️ verify per release — see the rail-width inconsistency above).
+- **Collapse:** `200ms` width+position, `ease-linear`.
+- **Spacing rhythm:** 8px inside a group / 16px between groups / 32–40px between sections; base 4px grid (4, 8, 12, 16, 24, 32, 40, 64, 96).
+- **Duration-by-elevation:** 0ms instant micro-states / ~150ms state changes / 200ms popovers / 300ms overlays; reveal easing `cubic-bezier(0.175, 0.885, 0.32, 1.1)`, **linear for chrome**.
+- **Sidebar hover/active fill = neutral accent; brand hue only on the focus ring + primary CTA.**
+
+### AI-slop failures for this surface (corpus list)
+
+Colored icon-background chips on every row · sidebar at the same contrast as content · brand color as the active-row fill · springy / ease-out collapse · fully hiding the sidebar · card soup · a single flat drop-shadow reused everywhere · off-scale spacing · one-layer outline focus ring that vanishes on a colored nav · inline expanding header search instead of a Cmd-K modal · single-letter *global* nav that collides with object actions · fixed nav with no reorder/pin/nest · always-visible row action icons · responsive collapse that just hides the sidebar and lets tables overflow · one bloated fixed top-bar avatar.
