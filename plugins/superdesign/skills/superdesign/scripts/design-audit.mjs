@@ -265,6 +265,14 @@ for (const theme of themes) {
   const context = await browser.newContext({ viewport: VIEWPORT, reducedMotion: 'no-preference' })
   const page = await context.newPage()
   await page.emulateMedia({ colorScheme: theme })
+  // A React app usually OWNS its theme: it reads a stored preference on mount and re-applies its
+  // own `.dark` class, so emulating `prefers-color-scheme` alone leaves it in light and the parity
+  // check below reports a missing dark mode that is right there. Seeding the conventional key
+  // drives it. Touch NOTHING but storage here — an init script runs before the document exists, so
+  // a stray `document.documentElement` throws and silently kills the whole script.
+  await page.addInitScript((t) => {
+    try { localStorage.setItem('theme', t) } catch { /* storage blocked by policy */ }
+  }, theme)
   // networkidle is the right target and the wrong guarantee: analytics beacons and polling keep a
   // real marketing site permanently busy. Degrade rather than crash, and say which one was used.
   let waited = 'networkidle'
@@ -326,7 +334,7 @@ if (themes.length > 1) {
   const [a, b] = themes
   if (sig(a) && sig(a) === sig(b)) {
     failures++
-    const line = ['FAIL', 'light ≠ dark', `${a} and ${b} paint identically — SKILL.md's Phase-1 gate requires both. If the app owns its own theme state (a .dark class it re-applies on mount), this check cannot drive it: verify that one in Phase 6 by clicking the toggle.`]
+    const line = ['FAIL', 'light ≠ dark', `${a} and ${b} paint identically — SKILL.md's Phase-1 gate requires both to exist. An app that stores its preference under a key other than \`theme\` will also land here; check that before assuming the dark mode is missing.`]
     report.themeParity = { identical: true }
     if (!asJson) console.log(`\n  [${line[0]}] ${line[1].padEnd(18)} ${line[2]}`)
   } else if (!asJson) {
