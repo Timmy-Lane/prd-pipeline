@@ -55,7 +55,7 @@ hand-copy that rots. Three upstream PRs merged. No skill listed twice.
    Until they are committed, update-skills.sh skips that clone. Then decide whether to apply the
    rewrites the section recommends to `skills/founder-distribution/SKILL.md` itself — the grounding
    is done, the edit to the skill body is not.
-3. Merge the three PRs (no push rights to LeventySeven from this machine — see Do not):
+3. Merge the remaining two PRs (see Do not for which repos need a fork+PR):
    compound-v#9, silver#2, workflow-investigation#2.
 4. **After compound-v#9 merges and compound-v updates**, delete the `founder-distribution` and
    `handoff` symlinks — the plugin will ship both and they would list twice.
@@ -74,8 +74,11 @@ bash tests/smoke.sh && bash tests/bundle-consistency.sh && claude plugin validat
 
 ## Do not
 - Do not copy a skill into `~/.claude/skills/`. Symlink the clone. Every copy here has gone stale.
-- Do not `git push` to any `LeventySeven/*` repo: `gh` is authenticated as Timmy-Lane, which has
-  `push: false` on all of them. Use `gh repo fork` + `gh pr create -R LeventySeven/...`.
+- Do not `git push` to `LeventySeven/compound-v` or `LeventySeven/silver`: Timmy-Lane has
+  `push: false` on both. Use the existing `fork` remote + a PR. **`LeventySeven/workflow-investigation`
+  is the exception — Timmy-Lane has `push: true, triage: true` there and can merge its own PRs.**
+  Check with `gh api repos/<owner>/<repo> --jq .permissions` rather than assuming; the old blanket
+  "no push to any LeventySeven repo" rule in this file was wrong and cost a round trip.
 - Do not put workflow-investigation in a marketplace. Private, internal repo; npx only.
 - Do not re-vendor compound-v. That is what pinned it at 0.3.0 while upstream reached 0.5.0.
 - Do not list a plugin whose source repo lacks `.claude-plugin/plugin.json` on its **default
