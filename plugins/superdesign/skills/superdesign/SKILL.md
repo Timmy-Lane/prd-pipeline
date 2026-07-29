@@ -346,12 +346,21 @@ detector.
 own criterion, and reports its own number has produced no evidence:
 
 ```bash
-grep -rIoE '\b(p|px|py|m|gap|w|h)-\[[^]]+\]' src --include='*.tsx' | wc -l   # must be 0
+grep -rIoE '\b(p|px|py|m|gap|w|h)-\[[^]]+\]' src --include='*.tsx' \
+  | grep -vE '\[[0-9.]+ch\]|calc\(|var\(' | wc -l    # must be 0
 grep -rIoE 'className="[^"]*\[#[0-9a-fA-F]{3,8}\]' src | wc -l               # must be 0
 ```
 
-Any non-zero count is a Phase-1 token-baseline defect. Repair the tokens; do not patch the
-component. Every screen must reference the one shared theme.
+**The three exclusions are not leniency, they are correctness.** A `ch` measure is *mandated* by
+Phase 3 (`max-width: 66ch`, never a px width), and `calc()` / `var()` are how shadcn's own
+primitives size themselves — `w-[var(--radix-select-trigger-width)]` has no token form. Without
+them this grep flags the skill's own reference implementation and its own instruction, which is how
+it read before it was ever run against `examples/`.
+
+A surviving hit is a **hardcoded dimension** — `h-[320px]`, `w-[8rem]` — and is a Phase-1
+token-baseline defect: repair the tokens, do not patch the component. The honest exception is a
+fixed-height chart or media container, which has no token because it is not a spacing decision;
+justify it in one line or delete it. Every screen must reference the one shared theme.
 
 **What to reach for.** Naming a forbidden token *while generating* raises its own probability, so the
 positive form is the only one that belongs in a build prompt — this list, not a ban list:

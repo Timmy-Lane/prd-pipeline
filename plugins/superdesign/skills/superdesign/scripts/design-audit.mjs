@@ -219,8 +219,16 @@ function measure(scale) {
   //   off4 (SOFT, reported not capped) — values off the 4px grid non-negotiable #6 names. Tailwind's
   //     `.5` steps (`px-3.5` = 14px, `py-2.5` = 10px) land here legitimately, and the skill's own
   //     gate-clean examples all use them, so capping this would fail the reference implementations.
+  // A colour fingerprint, for the theme-parity check. A dark mode changes COLOUR and not
+  // geometry, so a signature built from sizes can never see one — which is how the first version
+  // of that check passed a page that had no dark mode at all.
+  const paint = [getComputedStyle(document.body).backgroundColor,
+    ...[...new Set(cs.map(({ s }) => s.color))].slice(0, 6),
+    ...[...new Set(cs.map(({ s }) => s.backgroundColor))].slice(0, 6)]
+
   const offGrid = spacing.filter((n) => n % 2 !== 0)
   return {
+    paint,
     offGrid: offGrid.length,
     offGridValues: offGrid,
     off4: spacing.filter((n) => n % 4 !== 0).length,
@@ -305,6 +313,26 @@ for (const theme of themes) {
 }
 
 await browser.close()
+
+// Running both themes and passing both is not the same as HAVING both. A page with no dark mode
+// renders identically under either `prefers-color-scheme` and sails through twice — which is
+// exactly how a missing dark mode survives a gate that was run in both themes. SKILL.md's Phase-1
+// gate and quality-bar item 2 both require light AND dark to be real, so compare them.
+if (themes.length > 1) {
+  const sig = (t) => {
+    const m = report.themes[t]?.measurements
+    return m && JSON.stringify(m.paint)
+  }
+  const [a, b] = themes
+  if (sig(a) && sig(a) === sig(b)) {
+    failures++
+    const line = ['FAIL', 'light ≠ dark', `${a} and ${b} paint identically — SKILL.md's Phase-1 gate requires both. If the app owns its own theme state (a .dark class it re-applies on mount), this check cannot drive it: verify that one in Phase 6 by clicking the toggle.`]
+    report.themeParity = { identical: true }
+    if (!asJson) console.log(`\n  [${line[0]}] ${line[1].padEnd(18)} ${line[2]}`)
+  } else if (!asJson) {
+    console.log(`\n  [PASS] ${'light ≠ dark'.padEnd(18)} the two themes are separately authored`)
+  }
+}
 
 // axe's WCAG tags do NOT include target-size (off by default) or the landmark/heading rules
 // (best-practice). Ask for those explicitly — this gate does not cover them:
