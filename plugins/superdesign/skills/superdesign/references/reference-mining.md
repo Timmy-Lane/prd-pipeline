@@ -68,8 +68,8 @@ it; most sites will drop you at rung 2.
 ### Rung 0 — the first-party `design.md`
 
 A growing number of products publish their own design system as markdown for exactly this purpose.
-It is authoritative, complete, and — unlike anything you can measure — **it contains motion**.
-Probe before you launch a browser:
+When it *is* a spec it beats measuring on every axis, and — unlike anything you can measure — **it
+contains motion**. Probe before you launch a browser:
 
 ```bash
 curl -sIL -H 'User-Agent: Mozilla/5.0' "https://$DOMAIN/design.md" | grep -i '^content-type'
@@ -79,11 +79,30 @@ Verified live: `vercel.com/design.md`, `resend.com/design.md` and `clerk.com/des
 `text/markdown`. `linear.app/design.md` returns **200 with an HTML SPA shell** and `stripe.com`
 returns 404 — so gate on the content type, never on the status code.
 
-Two of these are worth reading as craft documents in their own right. `clerk.com/design.md` ships a
-`## Motion` section with exact curves (`ease-out-cubic` = `cubic-bezier(0.33, 1, 0.68, 1)`).
-`vercel.com/design.md` is not a token dump at all but an **agent prompt**, including a
-"reject generated-design reflexes" list that is a peer to `anti-slop.md` — cross-check it when you
-revise the catalog.
+**A `text/markdown` response is not automatically a token spec, and the rung is not finished until
+you have values in hand.** Three genres turn up at this URL, and only the first is what the rung
+promises:
+
+| Genre | Example | What to do |
+|---|---|---|
+| **a token spec** | `clerk.com/design.md` — ships a `## Motion` section with exact curves (`ease-out-cubic` = `cubic-bezier(0.33, 1, 0.68, 1)`) | read it; you are done |
+| **an agent prompt** | `vercel.com/design.md` — not a token dump at all, but instructions including a "reject generated-design reflexes" list that is a peer to `anti-slop.md` | read it for judgement, not for values; cross-check it when you revise the catalog. You still need rung 2 for the numbers |
+| **an index** | `resend.com/design.md` — ~20 lines pointing at `npx skills add resend/design-skills` and linking three sub-documents | follow the pointer, then **verify each link resolves** |
+
+
+That last row is not hypothetical: measured 2026-07-29, the three paths resend's own `design.md`
+links to — design-system/references/design-tokens.md and its two siblings — all **404**; the repo exists
+and is current, but it has been restructured and the index was not updated. A first-party source can
+be stale in exactly the way a mined one can. Fetch the tree before trusting a path:
+
+```bash
+curl -s "https://api.github.com/repos/OWNER/REPO/git/trees/main?recursive=1" \
+  | python3 -c "import sys,json;[print(t['path']) for t in json.load(sys.stdin)['tree'] if t['path'].endswith('.md')]"
+```
+
+Resend's real brand tokens live at resend-brand/SKILL.md in that repo, not where their index says. Worth the
+two extra requests: it gave the exact hex ladder (`#000000` / `#FDFDFD`) and the status palette that
+rung 2 then reproduced independently, which is the strongest confirmation a capture can get.
 
 ### Rung 1 — the published corpus
 

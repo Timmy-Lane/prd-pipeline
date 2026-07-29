@@ -346,21 +346,36 @@ detector.
 own criterion, and reports its own number has produced no evidence:
 
 ```bash
-grep -rIoE '\b(p|px|py|m|gap|w|h)-\[[^]]+\]' src --include='*.tsx' \
+grep -rIoE '\b(p|px|py|m|gap|w|h)-\[[^]]+\]' src --include='*.tsx' --exclude-dir=ui \
   | grep -vE '\[[0-9.]+ch\]|calc\(|var\(' | wc -l    # must be 0
-grep -rIoE 'className="[^"]*\[#[0-9a-fA-F]{3,8}\]' src | wc -l               # must be 0
+grep -rIoE 'className="[^"]*\[#[0-9a-fA-F]{3,8}\]' src --exclude-dir=ui | wc -l   # must be 0
 ```
 
-**The three exclusions are not leniency, they are correctness.** A `ch` measure is *mandated* by
-Phase 3 (`max-width: 66ch`, never a px width), and `calc()` / `var()` are how shadcn's own
-primitives size themselves — `w-[var(--radix-select-trigger-width)]` has no token form. Without
-them this grep flags the skill's own reference implementation and its own instruction, which is how
-it read before it was ever run against `examples/`.
+**The exclusions are not leniency, they are correctness** — each was added after the grep failed
+this skill's own reference implementation:
 
-A surviving hit is a **hardcoded dimension** — `h-[320px]`, `w-[8rem]` — and is a Phase-1
-token-baseline defect: repair the tokens, do not patch the component. The honest exception is a
-fixed-height chart or media container, which has no token because it is not a spacing decision;
-justify it in one line or delete it. Every screen must reference the one shared theme.
+- `ch` is *mandated* by Phase 3 (`max-width: 66ch`, never a px width).
+- `calc()` / `var()` are how shadcn's primitives size themselves; `w-[var(--radix-select-trigger-width)]`
+  has no token form.
+- `--exclude-dir=ui` because `components/ui/*` is **vendored, not yours**. shadcn ships `w-[8rem]`
+  on its dropdown/select content, `h-[300px]` on the command list and `w-[2px]` on the sidebar rail.
+  Flagging those tells you to edit files that quality-bar item 7 forbids you to fork — the gate
+  would be demanding you break a different rule to satisfy it.
+
+**Read a survivor, do not just count it.** The target is *no hit that could have been a token*, not
+a raw zero, because those are different claims and only the first is achievable:
+
+- **A spacing or sizing value that has a token** is a Phase-1 defect. Repair the token baseline, do
+  not patch the component. The commonest form is an exact scale step written the long way —
+  `h-[13rem]` is `h-52`, `h-[320px]` is `h-80`, `w-[4.5rem]` is `w-18` — which is free to fix and
+  changes nothing on screen.
+- **A one-off component dimension** — a chart's fixed height, a data-table column width, a media
+  frame — has no token because it is not a spacing decision. Inventing a scale to absorb a handful
+  of single-use values renames the magic numbers instead of systematising them. Leave it, and say
+  in one line what fixes it.
+
+The count is a reading prompt. A screen with four justified fixed heights is fine; a screen with
+forty is a token baseline nobody wrote. Every screen must reference the one shared theme.
 
 **What to reach for.** Naming a forbidden token *while generating* raises its own probability, so the
 positive form is the only one that belongs in a build prompt — this list, not a ban list:
