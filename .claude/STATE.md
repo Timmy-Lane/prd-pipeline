@@ -21,8 +21,13 @@ hand-copy that rots. Three upstream PRs merged. No skill listed twice.
   | silver | `~/Documents/GitHub/silver/silver` |
   | superdesign | `~/Documents/GitHub/prd-pipeline/plugins/superdesign/skills/superdesign` |
   | founder-distribution, handoff | `~/Documents/GitHub/compound-v/skills/*` |
-  | workflow-investigation | `~/Documents/GitHub/workflow-investigation/skills/workflow-investigation` |
+  | workflow-investigation | `~/Documents/GitHub/workflow-investigation/assets/SKILL.md` (see below) |
   evidence: a fresh `claude -p` session lists all five — symlinked skill dirs load fine.
+  workflow-investigation is the odd shape: a real directory whose `SKILL.md` is the symlink, because
+  the clone owns a bare file rather than a skill-shaped dir. It first pointed at
+  `skills/workflow-investigation/SKILL.md` — the exact path workflow-investigation#2 deletes — which
+  would have made the skill vanish silently on the next pull. `update-skills.sh` now understands both
+  shapes and resolves the clone from either.
 - `~/.claude/scripts/update-skills.sh` — checks every symlink, pulls each source clone, updates the
   marketplaces, exits 1 on drift. evidence: run shows 9/9 links ok and names the two clones that
   cannot pull.
@@ -33,8 +38,10 @@ hand-copy that rots. Three upstream PRs merged. No skill listed twice.
 - **founder-distribution is now grounded.** It was the only skill in compound-v dense with empirical
   claims and no `references/sources.md` entry, while its own honest-warrant section demanded three
   warrant tiers. A full-route bad-research run (10 parallel fetchers, 14 sub-questions, 164 sources,
-  ~200 verbatim-grounded claims) produced a `## founder-distribution` section, appended to
-  `~/Documents/GitHub/compound-v/references/sources.md` (+54 lines, uncommitted).
+  ~200 verbatim-grounded claims) produced a `## founder-distribution` section in
+  `~/Documents/GitHub/compound-v/references/sources.md`, and the skill body was rewritten against it
+  (107 -> 135 lines). Both shipped in `2613967` on the compound-v fork; PR #9 picked it up.
+  evidence: `bash scripts/check.sh` -> 28 skills, 0 failures, 0 warnings.
   **Three of its nine claims do not survive as written:** "several scaled to millions with no push
   feature at all" (no supporting instance exists), "almost every company got its first thousand from
   one channel" (Traction prescribes parallel testing first and addresses a later stage entirely), and
@@ -47,24 +54,30 @@ hand-copy that rots. Three upstream PRs merged. No skill listed twice.
   separately unreliable — `search` reported 15 notes while `research/notes/` held 164 files. File the
   bug in `LeventySeven/badresearch`, not here.
 
+- **workflow-investigation#2 is merged** (`3da308e`, 2026-07-29). The plugin surface is gone from
+  that repo — `.claude-plugin/`, `skills/`, `scripts/sync-plugin.sh` — and `npx github:` is again its
+  only install path. Its README had been advertising `/plugin install workflow-investigation@prd-pipeline`,
+  an entry dropped from the marketplace back in `95fb5f4`, so main documented an install that no
+  longer existed. The two real 1.2.0 fixes survived the revert: no duplicate slash command, and
+  corpus paths resolved from `WI_CORPUS_ROOT` rather than hardcoded. evidence:
+  `grep -c 'seventyleven\|/Users/admin' assets/SKILL.md` -> 0.
+
 ## Next
-1. `cd ~/Documents/GitHub/silver && git push -u origin feat/claude-code-plugin` — that branch tracks
-   no remote, so the silver skill currently cannot be updated by anything.
-2. `cd ~/Documents/GitHub/compound-v` — commit two things into PR #9: the `skills/handoff/SKILL.md`
-   frontmatter edit (English trigger + `argument-hint`) and the new `references/sources.md` section.
-   Until they are committed, update-skills.sh skips that clone. Then decide whether to apply the
-   rewrites the section recommends to `skills/founder-distribution/SKILL.md` itself — the grounding
-   is done, the edit to the skill body is not.
-3. Merge the remaining two PRs (see Do not for which repos need a fork+PR):
-   compound-v#9, silver#2, workflow-investigation#2.
-4. **After compound-v#9 merges and compound-v updates**, delete the `founder-distribution` and
-   `handoff` symlinks — the plugin will ship both and they would list twice.
+1. Merge the two remaining PRs. **Both need the fork+PR path** — see Do not.
+   - `compound-v#9` — carries the founder-distribution grounding + rewrite. On merge, compound-v
+     ships `founder-distribution` and `handoff` as plugin skills, so **delete those two symlinks
+     from `~/.claude/skills/` right after** or they list twice.
+   - `silver#2` — adds silver's plugin manifest to `master`. Only after it merges can silver go back
+     into the prd-pipeline marketplace (dropped in `8e66c98` because `master` has no manifest).
+2. File the `bad` engine bugs upstream in `LeventySeven/badresearch`: `funnel-gather` exits 0 with a
+   junk corpus, and `search` under-reports (15 rows against 164 files on disk).
 
 ## Open decisions
-- workflow-investigation PR: the BAD_GUIDE sweep wording. The old repo copy said "two copies, read
-  both", the installed copy said "only one on this machine". Shipped compromise: read `guidesfm/`,
-  also read a standalone `BAD_GUIDE.md` if present, prefer `guidesfm/` on disagreement. Confirm or
-  correct in the PR.
+- The BAD_GUIDE sweep wording in `assets/SKILL.md`. The old repo copy said "two copies, read both",
+  the installed copy said "only one on this machine". Shipped compromise, now on main: read
+  `guidesfm/`, also read a standalone `BAD_GUIDE.md` if present, prefer `guidesfm/` on disagreement.
+  It went in with #2 without a separate review — confirm it is right or correct it directly, since
+  Timmy-Lane can push to that repo.
 
 ## Verify with
 ```bash
