@@ -121,6 +121,7 @@
   // ── resolution ─────────────────────────────────────────────────────────────────────────
 
   function resolve(el) {
+    if (!el || el.nodeType !== 1) return { resolved: {}, blockedSheets: 0, matchedRules: 0, tokenCount: 0 }
     const { hits, tokens } = collect(el)
     const root = getComputedStyle(document.documentElement)
     const comp = getComputedStyle(el)
@@ -162,12 +163,21 @@
         ctx: w.ctx,
         declared: w.declared.trim(),
         computed: comp.getPropertyValue(w.prop).trim(),
-        tokens: toks,
+        tokens: toks.filter((t) => !isPlumbing(t)),
+        plumbing: toks.filter(isPlumbing).map((t) => t.token),
         blast: blastRadius(w.sel),
       }
     }
     return { resolved, blockedSheets, matchedRules: hits.length, tokenCount: tokens.length }
   }
+
+  // `--tw-*` are Tailwind's internal composition slots, not the project's design system. A ring or
+  // shadow utility declares five of them at once, almost always empty or `0 0 #0000`, and left in
+  // they crowd every real token off the panel — measured on foji, where a card's entire readout was
+  // three `--tw-*-shadow = 0 0 #0000` rows and nothing else. They are kept, under `plumbing`, so a
+  // pin never silently drops a property; they just stop competing for the eye.
+  const NOOP = /^(0 0 #0+|none|normal|auto|initial)$/i
+  const isPlumbing = (t) => t.token.startsWith('--tw-') || !t.value || NOOP.test(t.value)
 
   // How many nodes, and how many DISTINCT components, this rule reaches. This one number decides
   // which layer the fix belongs in — see references/critique.md § The pointed-at defect.
@@ -314,8 +324,16 @@
         )
       }
     }
-    const untokened = Object.entries(res.resolved).filter(([, r]) => !r.tokens.length).map(([p]) => p)
+    const untokened = Object.entries(res.resolved)
+      .filter(([, r]) => !r.tokens.length && !r.plumbing?.length)
+      .map(([p]) => p)
     if (untokened.length) rows.push(`<div class="warn">no token: ${untokened.join(', ')}</div>`)
+    const plumbed = Object.entries(res.resolved).filter(([, r]) => !r.tokens.length && r.plumbing?.length)
+    if (plumbed.length) {
+      rows.push(
+        `<div style="color:#52525b">${plumbed.length} propert${plumbed.length === 1 ? 'y' : 'ies'} carry only Tailwind's internal --tw-* slots (${plumbed.map(([p]) => p).join(', ')}) — plumbing, not design</div>`,
+      )
+    }
     if (res.blockedSheets) {
       rows.unshift(
         `<div class="warn"><b>${res.blockedSheets} stylesheet(s) unreadable</b> — cross-origin or file://. Serve over http://localhost.</div>`,
