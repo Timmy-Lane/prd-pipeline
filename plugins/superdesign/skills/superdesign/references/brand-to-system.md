@@ -37,8 +37,9 @@ easing pair. The semantic and component token layers are **identical across all 
 archetypes** (this is what makes swapping cheap: same trick as dark mode — repoint semantic
 aliases at different primitives). Every archetype ships light + dark, obeys the 60-30-10
 application rule (neutral 60 / secondary 30 / saturated accent 10), and must clear the same
-gate: WCAG AA (4.5:1 body / 3:1 large-UI/focus) and APCA (Lc ≥ 75 body, ≥ 60 large),
-validated per foreground/background pair, in both modes.
+gate: WCAG AA (4.5:1 body / 3:1 large-UI/focus), validated per foreground/background pair, in both
+modes. **Never gate on an APCA Lc number** — no W3C document specifies one (→ `accessibility.md`
+§ APCA); compute it as an advisory and never let it override a WCAG 2 failure.
 
 | Archetype | Fingerprint (dominant axes) | Aaker / archetype | Type | Radius base | Texture | Motion |
 |---|---|---|---|---|---|---|
@@ -365,10 +366,12 @@ Firefox's `gfx.downloadable_fonts.fallback_delay` prefs. Use them; don't cite th
 
 **Retrieve the preset — do not recall one.** A recalled preset is invented plausible OKLCH, which
 is exactly the convergence this skill exists to prevent. `https://tweakcn.com/r/registry.json`
-lists the catalog (verified 2026-07-26: `modern-minimal`, `t3-chat`, `twitter`, `mocha-mousse`,
-`bubblegum`, `doom-64`, `catppuccin`, `graphite`, `perpetuity`, `kodama-grove`, `cosmic-night`,
-`tangerine`, `quantum-rose`, `nature`, `bold-tech`; further names such as `claude` resolve without
-being listed). Fetch the nearest at `https://tweakcn.com/r/themes/<name>.json` — a shadcn
+lists the catalog — **36 presets as of 2026-08-05**, up from the 15 recorded on 2026-07-26, with
+all 15 still present: `modern-minimal`, `t3-chat`, `twitter`, `mocha-mousse`, `bubblegum`,
+`doom-64`, `catppuccin`, `graphite`, `perpetuity`, `kodama-grove`, `cosmic-night`, `tangerine`,
+`quantum-rose`, `nature`, `bold-tech`. **Read the manifest rather than this list** — it grew by 21
+in ten days, and `claude`, which the earlier note called unlisted-but-resolvable, is now listed.
+Fetch the nearest at `https://tweakcn.com/r/themes/<name>.json` — a shadcn
 `registry:style` whose `cssVars.theme` carries `font-sans`/`font-mono`/`font-serif`, `radius` and
 the `tracking-*` ramp, and whose `cssVars.light` / `cssVars.dark` carry the full semantic set as
 real OKLCH. If the fetch fails, fall back to `assets/theme.css` and say out loud that you are
@@ -1136,7 +1139,7 @@ components skin any archetype by swapping one primitive file:
   single `--radius` base (all-sharp / all-soft / all-pill). Mixed radii are allowed **only**
   with a documented rule ("buttons full-pill, cards 12px, inputs 8px") followed everywhere.
   Round buttons on a square layout, or square cards on a pill-button page, is broken design.
-- **Gates**: WCAG AA + APCA on every pair in both modes; ≤2 type families (3 only if one is
+- **Gates**: WCAG AA on every pair in both modes, APCA advisory only; ≤2 type families (3 only if one is
   mono); ≤3 motion curves; `prefers-reduced-motion` reduces (cross-fades) rather than
   deletes; coherence check (a "playful +0.8" vector must not emit radius 0).
 - **Anti-convergence guardrails**: no reflexive `indigo/violet/purple-500` accent; no

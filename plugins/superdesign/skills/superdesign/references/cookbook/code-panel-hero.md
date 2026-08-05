@@ -142,7 +142,8 @@ export function CodePanelHero() {
 - The `<pre><code>` is real selectable text (screen-reader friendly) — never an image of code.
 - Copy buttons have `aria-label`; the copied state is conveyed in text, not color alone.
 - Traffic-light dots are `aria-hidden` decoration.
-- Keep body/subhead ≥ 4.5:1; on dark, prefer APCA Lc ≥ 75.
+- Keep body/subhead ≥ 4.5:1. Dark panels are where WCAG 2 is least trustworthy, so read APCA there
+  as a second opinion — but there is no Lc threshold to gate on (→ `accessibility.md` § APCA).
 
 ## Anti-slop
 - **One** background texture (dot-grid *or* rules *or* binary), low opacity — never stacked, never a

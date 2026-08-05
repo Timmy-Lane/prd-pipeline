@@ -54,15 +54,22 @@ WebFetch or curl is sufficient.
 
 | URL | Returns |
 |---|---|
-| `https://tweakcn.com/r/registry.json` | Catalog manifest — 15 preset names |
+| `https://tweakcn.com/r/registry.json` | Catalog manifest — 36 preset names (2026-08-05; was 15 on 2026-07-26, all 15 still present) |
 | `https://tweakcn.com/r/themes/<name>.json` | `registry:style` — full light+dark OKLCH token set, fonts, radius, tracking, shadows |
 | `https://magicui.design/r/<name>.json` | `registry:ui` — real component source in `files` |
 
-Probe pattern for an unlisted registry: try `<site>/r/registry.json`, then `<site>/r/<name>.json`.
-**Report only endpoints you actually hit.** `https://ui.shadcn.com/llms.txt` does NOT resolve to an
-llms.txt index (checked 2026-07-26) — do not build a step on it. The manifest is the reliable
-enumeration and the guessable `/r/<name>.json` path is the reliable retrieval; a site can serve more
-than it advertises.
+Probe pattern for an unlisted registry: try `<site>/r/registry.json`, then `<site>/r/index.json`,
+then `<site>/r/<name>.json`. **Report only endpoints you actually hit** — every URL
+in this table was re-fetched 2026-08-05, and the shape is not uniform across registries. tweakcn
+answers on `https://tweakcn.com/r/registry.json`; ui.shadcn.com does not, and answers
+`https://ui.shadcn.com/r/index.json` instead. Nor is a component retrievable there at a bare
+name — `https://ui.shadcn.com/r/button.json` is a 404 HTML page, and the real path carries the
+style: `https://ui.shadcn.com/r/styles/new-york/button.json`. A 404 that returns `text/html` is the
+site's own not-found page, so check the content type before concluding a registry has no manifest.
+
+`https://ui.shadcn.com/llms.txt` **does** resolve (200 `text/plain`, 12 KB, 2026-08-05). It did not
+on 2026-07-26, which is the useful lesson: a negative result about a live endpoint has a shelf life,
+so it carries a date or it does not belong in a reference file.
 
 **Retrieve before generate.** This is the skill's own doctrine, and this table is the only reason it has
 an address. Prefer install-from-a-curated-registry or reference-a-real-screen over blank-prompt
