@@ -12,6 +12,7 @@ The one load-bearing idea: **slop is a workflow bug, not a taste bug.** AI ships
 2. [The named acceptance tests](#2--the-named-acceptance-tests-does-this-effect-earn-its-place) — Wow / Removal / Device / Accessibility / Context, plus Silhouette and Name-swap
 3. [The anti-laziness playbook](#3--the-anti-laziness-playbook-force-effort--completeness) — root-cause→counter, banned-output blocklist, scope-lock, grounding, verification, dials, anti-center, completeness
 4. [The redesign ladder](#4--the-redesign-ladder-audit--diagnose--fix-non-destructive) — impact/risk fix order, the iteration-decay stop rule, the never-change-silently list
+5. [The pointed-at defect](#5--the-pointed-at-defect) — when a human points at a pixel: the pin schema, the blast-radius layer decision, the sibling-token trap, the severity mapping
 
 - [Cross-references](#cross-references) — which file owns the tells, the WCAG numbers, the tokens, the recipes
 
@@ -280,6 +281,69 @@ Plus tactile `:active` feedback (`-translate-y-[1px]` / `scale-[0.98]`) and a `f
 - Form field **names and order** (breaks autofill *and* analytics)
 - Brand logo / wordmark
 - Legal / consent copy
+
+---
+
+## 5 · The pointed-at defect
+
+Everything above reviews work the model can see. This section covers the other direction: a human
+points at a rendered element and says one sentence. That sentence is the **new external signal**
+§3.5's stop rule demands — the only kind of iteration that is not theatre.
+
+**The failure it prevents is not "we misunderstood the user".** It is that a complaint about a
+screen gets fixed on the node the finger landed on. A one-off `className` at a call site is a named
+defect (SKILL.md § Phase 2 → "Add a variant, never a call-site override"), so a review loop that
+produces node patches manufactures the exact slop this file gates. **The layer is decided before the
+fix, mechanically, and never by reading the sentence.**
+
+**Capture with `scripts/pin-overlay.js`.** Alt-click, one sentence, enter. The overlay walks the
+CSSOM rather than `getComputedStyle`, because computed values are the specified value *with `var()`
+already substituted* — by the time you read `oklch(0.542 0.205 27)` the token name is gone. The
+declared value survives in CSSOM and names it exactly. Pins land in `window.__sdPins`, and in
+`.superdesign/pins.jsonl` when `scripts/pin-server.mjs` is up. Read them with
+`node scripts/pin-report.mjs --dir <project>`.
+
+**The layer decision — one `querySelectorAll`, not a judgement call:**
+
+| The winning rule reaches | Layer | The edit |
+|---|---|---|
+| **>1 distinct `data-slot`** | **TOKEN** | one line in the theme; every consumer moves together |
+| **exactly one `data-slot`** | **VARIANT** | a row in that component's `cva` table — never the shared token |
+| **one node, no owning component** | **OVERRIDE** | already a defect. Delete it, add a variant. Report it as one. |
+| **an inline `style` attribute** | **OVERRIDE** | never a design decision; always a leak |
+| **no `data-slot` anywhere** | **NODE** | the project has no component boundary to hang a variant on — say so rather than inventing one |
+
+**The sibling trap, which no screenshot can show.** Several tokens routinely carry a byte-identical
+value, and moving one silently leaves the rest behind — fixed on the pinned screen, broken two
+routes away. Measured on a real project, 2026-08-05: `--primary` shares `oklch(0.542 0.205 27)` with
+`--destructive`, `--ring`, `--sidebar-primary` and `--sidebar-ring` in `:root`, **and again in
+`.dark`** at a different value. Eight declarations, one intent. `pin-report.mjs` scans the theme file
+per block and names them; the in-page overlay names only the ones live in the current mode, which is
+why the report reads the file and the overlay does not.
+
+That scan is also a **design finding in its own right**: a brand hue identical to the destructive hue
+means colour cannot distinguish "publish" from "delete", which is § Accessibility's "colour is never
+the only signal" failing before anyone opened axe.
+
+**Severity, read off the resolution and never off the sentence** (→ §1.5 for the scale):
+
+| Resolution | Severity |
+|---|---|
+| the token is also the `--ring` or a state colour, or the sibling set crosses semantic roles | **P0** |
+| TOKEN, and the value fails a contrast floor in either theme | **P0** |
+| OVERRIDE | **P1** — a defect the user did not know they were pointing at |
+| no property on the element resolved to any token | **P1**, and it is a *Phase 1* finding: the value is hard-coded, so there is no system to correct |
+| TOKEN or VARIANT, no contrast consequence | **P2** |
+
+**A pin that resolves to no token is returned, not answered.** It means the surface was built without
+a token baseline; patching the pinned value hides that and leaves the next forty values wrong. Say
+which phase failed and repair the baseline.
+
+**Two limits, both structural.** Cross-origin and `file://` stylesheets are not origin-clean, so
+`cssRules` throws and resolution returns nothing — the pin carries `blockedSheets` and the report
+refuses to pretend; serve over `http://localhost`. And the pin records one viewport and one theme,
+because a `@media` context is part of the answer: the same node at 1440 and at 390 can resolve to
+different owners, and both are correct. Pin at both, or state which one you pinned.
 
 ---
 

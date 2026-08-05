@@ -62,12 +62,10 @@ execution disabled by policy]`, read those three files by hand before starting P
 
 ## What this does
 
-Produce UI that looks **deliberately designed for its brand**, not generated. The default failure
-mode of any model is convergence on the statistical center of every SaaS template it was trained on
-("AI slop"): Inter, indigo, purple gradients, centered hero + three cards, one flat shadow, no real
-states. This skill defeats that with a **system-first workflow** — commit to a brand, generate a
-token system, compose from vetted patterns, then gate the result — instead of hand-writing markup
-that drifts toward the mean.
+**The default failure mode of any model is convergence on the statistical center of every SaaS
+template it was trained on.** Everything below exists to defeat that one thing. The tells live in
+`references/anti-slop.md` and deliberately not here — naming one while generating raises its own
+probability.
 
 **Separate the three jobs.** Slop comes from fusing them in one prompt: (1) *taste direction* —
 what should this feel like, (2) *exploration* — what are the options, (3) *spec/build* — what
@@ -152,6 +150,29 @@ LAST in any prompt (arXiv 2307.03172).
 ## Phase 1 — Brand → brief → tokens (system-first)
 
 Decide the aesthetic *before* writing any UI. Read `references/brand-to-system.md` before starting.
+
+**1a-0. Cold start — the user named a surface and nothing else.** Fires only when all three are
+absent: what the product does, who it is for, any named reference. Ask three questions in ONE
+message with each default already printed, then **build on those defaults in the same turn** — the
+intake never blocks and never waits for a reply. It spends the one clarification the first-turn
+rule allows, at the last point where an answer still moves a token.
+
+- **Q1 the room** — five plain situations plus a five-word blank, *"it lets someone ___"*. Sets the
+  six floats and yields the product noun that PROPOSITION, the audience and the non-UI anchor
+  descend from. A tautological blank ("use my app") counts as unanswered.
+- **Q2 the mistake you'd accept** — one forced choice between two named real products, six-word
+  behavioural glosses, plus an explicit "neither". Pins the archetype. **Neither side may be a
+  SaaS-minimal or Dark-premium exemplar** — the reflex lane is off the menu.
+- **Q3 the never** — five options drawn only from the movements that carry hard numbers. Sets
+  MOVEMENT, TENSION, one countable CONSTRAINT, GRID_DISCIPLINE and TEXTURE_LEVEL.
+
+**PROPOSITION is a commitment about the artifact, never a market claim** — "behaves like an
+instrument, not a dashboard", never "the fastest way to invoice". That is what keeps
+non-negotiable 12 satisfiable on a product nobody has described yet.
+
+Never default to SaaS-minimal because the vector is weak. The option tables, the room→float map,
+the archetype pairs, the movement lock and the anchor rule are in
+`references/brand-to-system.md` § The cold-start intake.
 
 **1a. Compress the brand into the ~6 spectrum floats** (−1…+1; the axes are named in
 `brand-to-system.md` § How the engine uses these). `ultrathink` here — this is one of the two
@@ -402,9 +423,6 @@ owns the *process* (two isolated assessments, the Nielsen heuristics as yes/no, 
 Alex + Sam personas for product surfaces, and the redesign ladder for "off but I can't say why").
 `anti-slop.md` stays SSOT for the *tells*.
 
-**Never skip this pass to save time.** No shipping AI UI product verifies anything before
-completion; this gate is the whole difference between this skill and a well-configured v0 prompt.
-
 ---
 
 ## Phase 5 — Accessibility gate
@@ -464,10 +482,6 @@ Text review cannot see a broken layout. Before "done", look at the result.
 and 390×844**, in **light and dark**. Read the screenshots against the Design Brief from Phase 1,
 not against your memory of the code.
 
-**Alternative, if chrome-devtools-mcp is connected:** `resize_page` 1440 → `take_screenshot` → read
-→ `resize_page` 390 → `take_screenshot` → read → `lighthouse_audit` → `list_console_messages`.
-Refer to those tools fully qualified (`chrome-devtools:take_screenshot`).
-
 **Timing rule:** wait for `networkidle` before screenshotting or inspecting the DOM on any dynamic
 app. Screenshotting before network idle captures an empty shell and produces a false pass.
 
@@ -482,11 +496,8 @@ If no browser is available, say so in one line — do not claim the gate passed.
 reports, re-run it, exit 0 or stop and report. **Every additional loop must introduce a signal the
 previous loop did not have** — a new script run, a new render, a human. Otherwise it is theatre. At
 most **two** model-critique passes on one screen: pass 1 finds real defects; by pass 3 the
-suggestions are measurably worse than the design. Evidence: GPT-4 GSM8K 95.5 → 91.5 → 89.0 and
-GPT-3.5 CommonSenseQA 75.8 → 38.1 under repeated intrinsic self-correction (arXiv 2310.01798
-Table 3); Duan et al. CHI 2024 found LLM heuristic-evaluation accuracy *falls* as the UI improves —
-9 of 100 violations LLM-only vs 62 human-only. The rest of the evidence, including the ablation that
-prices a checker in the loop at +3.0 absolute, is in `references/verification.md`.
+suggestions are measurably worse than the design. The measurements behind that, and the ablation
+that prices a checker in the loop, are in `references/verification.md`.
 
 ---
 

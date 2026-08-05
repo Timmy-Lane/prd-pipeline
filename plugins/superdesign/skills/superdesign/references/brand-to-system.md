@@ -12,6 +12,7 @@ it ships the archetype verbatim rather than the beige mean everyone converges on
 - [How the engine uses these](#how-the-engine-uses-these) — the fingerprint table (type · radius · texture · motion per archetype), the OKLCH hue conventions
 - [Design dials](#design-dials-set-these-five-before-layout) — the five named knobs and what each gates, the product-vs-marketing defaults, the seven archetypes on the dials
 - [The art-direction brief](#the-art-direction-brief-the-pre-token-ritual) — PROPOSITION / ANCHORS / MOVEMENT are authored here; why adjectives go beige and why anchors are exemplars, not personas
+- [The cold-start intake](#the-cold-start-intake) — the three questions a non-designer can answer, the room→float table, the archetype pairs, the movement lock, the anchor rule
 - [The font anti-reflex procedure](#the-font-anti-reflex-procedure) — the 4-step reject loop, the serif-in-a-dashboard ban, metric-matched fallbacks, `font-display`
 - [Retrieving a starting preset](#retrieving-a-starting-preset-tweakcn-registry) — the tweakcn registry URLs, the verified catalog of preset names, the `registry:style` shape, the offline fallback, the radius personality dial
 - The seven archetypes — each a full bundle (personality · palette · type · radius · shadow · motion · signature moves):
@@ -188,6 +189,129 @@ measures **1.6–2.1×** diversity over direct prompting on creative tasks, trai
 accuracy or safety cost. Transfer to UI is UNVERIFIED but mechanism-level. Never average the three —
 averaging is how you arrive back at the mean you were escaping.
 
+## The cold-start intake
+
+Fires at SKILL.md → Phase 1a-0, and only there: the user named a surface and supplied no product,
+no audience and no reference. Ask all three questions in one message, print every default, and
+build on the defaults in the same turn. An unanswered intake still produces a specific sourced
+direction; an answered one is strictly better. Nothing here waits.
+
+**Use no design vocabulary in the questions.** Not "aesthetic", not "palette", not "typography",
+not "vibe", not "brand". A user who could answer those would not have triggered this section, and
+an adjective in reply is worse than silence — *unnamed ambition becomes beige*.
+
+### Q1 — the room
+
+> *Which room is this for? And finish this in five words: "it lets someone ___".*
+>
+> A. Somewhere a mistake is expensive — money, health, records, the law.
+> B. Somewhere skilled work happens all day with a tool in hand.
+> C. Somewhere someone decides whether to buy.
+> D. Somewhere someone does this for themselves, unhurried.
+> E. Somewhere something is happening now and someone must react.
+>
+> Default if unanswered: **A** for a product surface, **C** for a marketing surface.
+
+Negative is the left-hand pole of each axis named in § How the engine uses these.
+
+| Room | Serious↔Playful | Trad↔Modern | Warm↔Cool | Restrained↔Bold | Econ↔Premium | Calm↔Energetic |
+|---|---|---|---|---|---|---|
+| A expensive mistake | −0.8 | +0.2 | 0.0 | −0.7 | +0.1 | −0.6 |
+| B skilled work all day | −0.5 | +0.6 | −0.2 | −0.5 | +0.3 | −0.4 |
+| C deciding to buy | 0.0 | +0.5 | −0.4 | +0.6 | +0.5 | +0.4 |
+| D for themselves | +0.4 | +0.1 | −0.7 | −0.2 | +0.2 | −0.5 |
+| E react now | −0.7 | +0.7 | +0.6 | +0.5 | −0.3 | +0.8 |
+
+The five-word blank is the field that matters. Its noun becomes the audience, its verb becomes
+PROPOSITION, and its object is the first candidate for the NON-UI anchor — "it lets someone contest
+a parking ticket" gives you the ticket, the envelope and the deadline. A tautological blank ("use
+my app", "do their work") carries no noun; treat Q1 as unanswered.
+
+**Q1 does not choose the archetype.** Rooms A and B would snap straight back to SaaS-minimal, which
+is the defect. Q1 sets the floats and the noun; Q2 sets the archetype.
+
+### Q2 — the mistake you'd accept
+
+> *Both of these are well made and they fail in opposite directions. Which failure would you rather
+> ship?*
+>
+> Two named products, six words each, plus **"neither / haven't used either"**.
+
+| Room | Option 1 → archetype | Option 2 → archetype | Neither → |
+|---|---|---|---|
+| A | **GOV.UK** — plain, ugly, never once confusing → Brutalist | **Monzo** — your money, but it talks back → Playful | Brutalist |
+| B | **Ableton Live** — dense, gridded, nothing decorative → AI-dev-tool | **iA Writer** — one thing on screen, paper → Warm-paper | AI-dev-tool |
+| C | **Gumroad** — loud flat colour, no persuasion theatre → Playful | **Aesop** — apothecary restraint, everything is type → Editorial | Editorial |
+| D | **Are.na** — a filing cabinet you enjoy → Brutalist | **Bear** — warm paper, serif, no chrome → Warm-paper | Warm-paper |
+| E | **Bloomberg Terminal** — black, mono, dense, no chrome → AI-dev-tool | **Citymapper** — colour-coded lines, legible at speed → Playful | AI-dev-tool |
+
+**SaaS-minimal and Dark-premium appear on no pair and in no default.** They are the two lanes the
+corpus itself names as reflexes; a menu that offers the mean will be handed the mean.
+
+When a product is chosen, hand its URL to `scripts/extract-reference.mjs` on the Phase 1a path and
+design against the six measured mechanics. Never recall them — a recalled mechanic is invented
+plausible detail. If the capture fails (exit 3 no page, exit 4 no playwright), say so in one line
+and fall to the archetype in the table; the intake still completes.
+
+**THREE THINGS THIS IS NOT is filled from the rejected options**: the unchosen half of the pair,
+plus SaaS-minimal and Dark-premium. You never needed to know what the product is to know what it
+is not.
+
+### Q3 — the never
+
+> *Finish the sentence: whatever else this does, it must never ___.*
+>
+> 1. make someone hunt for the thing they came for
+> 2. look more finished than it is
+> 3. feel fragile
+> 4. make someone lose their place
+> 5. hide what the machine is doing
+>
+> Default if unanswered: **1** for a product surface, **4** for a marketing surface.
+
+| Never | MOVEMENT | GRID | TEXTURE | TENSION | CONSTRAINT (countable) | NON-UI anchor + structural parameter |
+|---|---|---|---|---|---|---|
+| 1 hunt | Swiss / International Typographic | 2 | 0 | scale jump | exactly 2 hues + neutrals | a station departure board — 8/20/32 field grid, leading a whole multiple of the baseline unit |
+| 2 finished | Brutalism (web) | 1 | 0 | grid violation | radius in {0} | a photocopied zine — 1px hairlines, zero shadow |
+| 3 fragile | Neo-brutalism | 1 | 0 | colour clash | border 3px on every interactive element | a road sign — border 2–4px, shadow offset 4–8px at zero blur |
+| 4 lose place | Editorial / print | 0 | 1 | asymmetry | measure 66ch, ≤3 type sizes | a Penguin paperback — 45–75ch, 66 the target |
+| 5 hide | Cyberpunk / terminal / CRT | 3 | 1 | colour clash | `font-mono` on every number | an oscilloscope — 1px scan line, single phosphor hue |
+
+Every parameter above is sourced in § The movement layer. **Liquid Glass and Neumorphism are off
+the menu** even though they carry numbers: the first is current platform fashion, the second fails
+the contrast gate by construction.
+
+**The collision bump.** If Q3's movement is the archetype's own native school (Q2 → Brutalist and
+Q3 → 2 or 3), take the next row down the list. A movement that restates the archetype is not a
+second axis.
+
+**Form versus voice — the tie-break.** The movement wins **radius**, border width, grid and
+texture. The archetype wins colour, type and motion. This extends the split already stated above
+(archetypes fix colour/type/radius/shadow/motion; a movement additionally fixes grid and texture) at
+the one field the two both claim, which is radius.
+
+### The anchor rule
+
+An intake anchor carries a **structural** parameter — a length, a count, a border width, a grid, a
+measure. **Never a colour.** The colour would be recalled, and a recalled colour is invented
+plausible detail presented as measurement. Colour is derived from the floats and the archetype;
+structure is what the anchor is for.
+
+### Identity versus function
+
+**Differentiate:** accent hue, type stack, canvas lightness, radius base, texture level, elevation
+recipe. **Never differentiate:** the 4px spacing grid, the ≤300ms duration ceiling, the two easing
+curves, the contrast floors, the state matrix, the 45–75ch measure. Fleeing a settled answer is a
+bug, not differentiation — `reference-mining.md` already says this for the mined-reference case;
+it holds for every case.
+
+### PROPOSITION on a cold start
+
+PROPOSITION is a commitment about the artifact, never a market claim. "Behaves like an instrument,
+not a dashboard" is authorship about a thing you are building. "The fastest way to invoice" is a
+claim about a product you know nothing about, and it is fabrication. Hegarty's card test still
+applies — hold it next to the artifact, not next to the market.
+
 ## The font anti-reflex procedure
 
 Type is the highest-ROI, lowest-risk brand move (→ Fix-Priority §1 in the workflow) and the
@@ -266,8 +390,7 @@ surface; one restrained accent lives strictly in the 10% action lane. The whole 
 *restraint as a signal* — every visible element looks like a decision.
 
 **When to use.** B2B SaaS, dashboards, dev tools, productivity, internal tools, data-dense
-product UI. The safe default when the brand vector is weak or the domain is "serious
-software." **Avoid** for consumer/lifestyle, kids, or anything that needs warmth or delight.
+product UI. **Avoid** for consumer/lifestyle, kids, or anything that needs warmth or delight.
 
 **Color.** Achromatic base, faintly cool-tinted (slate), so grays never read dead. One
 considered blue accent — *not* the reflexive `indigo-500 #6366F1`; commit to a real blue at
