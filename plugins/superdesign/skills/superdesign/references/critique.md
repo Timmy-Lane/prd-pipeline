@@ -303,6 +303,12 @@ declared value survives in CSSOM and names it exactly. Pins land in `window.__sd
 `.superdesign/pins.jsonl` when `scripts/pin-server.mjs` is up. Read them with
 `node scripts/pin-report.mjs --dir <project>`.
 
+**Alt+shift+drag instead where an element is missing.** That pin (`kind: "add"`) names no element,
+because there is not one yet: it names the parent that would hold it, the index between which two
+named siblings, and the box that was drawn. It is the answer to the other half of a design
+complaint, and it exists because "instead create kanban here" alt-clicked onto the nearest button
+cannot say whether the kanban replaces that button, sits beside it, or goes in the other panel.
+
 **The layer decision — one `querySelectorAll`, not a judgement call:**
 
 | The winning rule reaches | Layer | The edit |
@@ -332,12 +338,15 @@ the only signal" failing before anyone opened axe.
 | the token is also the `--ring` or a state colour, or the sibling set crosses semantic roles | **P0** |
 | TOKEN, and the value fails a contrast floor in either theme | **P0** |
 | OVERRIDE | **P1** — a defect the user did not know they were pointing at |
-| no property on the element resolved to any token | **P1**, and it is a *Phase 1* finding: the value is hard-coded, so there is no system to correct |
+| no property resolved to any token, on a pin that points AT an element | **P1**, and it is a *Phase 1* finding: the value is hard-coded, so there is no system to correct |
 | TOKEN or VARIANT, no contrast consequence | **P2** |
 
 **A pin that resolves to no token is returned, not answered.** It means the surface was built without
 a token baseline; patching the pinned value hides that and leaves the next forty values wrong. Say
-which phase failed and repair the baseline.
+which phase failed and repair the baseline. **An `add` pin is the one exception**: it points at the
+gap between two elements, so it resolves the *parent's* styling and having no token of its own is
+what it is rather than a defect it found. `pin-report.mjs` exempts it from the exit code for exactly
+that reason — answer it by building the thing, in the layer the parent's resolution names.
 
 **Two limits, both structural.** Cross-origin and `file://` stylesheets are not origin-clean, so
 `cssRules` throws and resolution returns nothing — the pin carries `blockedSheets` and the report

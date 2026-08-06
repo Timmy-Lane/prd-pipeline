@@ -9,13 +9,17 @@
 //   the rule reaches >1 distinct data-slot   → TOKEN     edit the theme, everything moves together
 //   exactly one data-slot                    → VARIANT   edit that component's cva table
 //   exactly one node, classes differ from
-//   its same-slot siblings                   → OVERRIDE  already a SKILL.md:257 defect — delete it
+//   its same-slot siblings                   → OVERRIDE  already a SKILL.md:278-281 defect — delete it
+//
+// A pin of kind `add` skips all of that: it points at the gap between two elements rather than at
+// an element, so there is no winning rule to file under a layer. It prints where the thing goes.
 //
 //   node scripts/pin-report.mjs --dir ~/Documents/GitHub/socialAI
 //   node scripts/pin-report.mjs --dir ~/Documents/GitHub/foji --json
 //
 // Exit code = number of pins that resolved to no token at all. Those are the ones where the
-// design has no system behind it, which is a Phase-1 finding, not a styling request.
+// design has no system behind it, which is a Phase-1 finding, not a styling request. An add pin is
+// exempt: resolving to no token of its own is what an add pin IS, not a defect it found.
 
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve, relative, extname } from 'node:path'
@@ -36,17 +40,47 @@ if (!existsSync(pinFile)) {
   process.exit(1)
 }
 
-const pins = readFileSync(pinFile, 'utf8')
-  .split('\n')
-  .filter(Boolean)
-  .map((l) => {
+// pins.jsonl is an append-only log: an edit and a delete are new records carrying the same `id`,
+// never a rewrite of an earlier line. So the current set of pins is a fold over the file, and a
+// reader that does not fold reports pins the user deleted. A record with no `id` predates the log
+// format and folds through unchanged. The same fold lives in pin-server.mjs's GET /__sd_pins —
+// two consumers, ~14 lines each; a third is when it becomes a module.
+const fold = (lines) => {
+  const order = []
+  const byId = new Map()
+  let legacy = 0
+  for (const raw of lines) {
+    let r
     try {
-      return JSON.parse(l)
+      r = JSON.parse(raw)
     } catch {
-      return null
+      continue
     }
-  })
-  .filter(Boolean)
+    if (!r.id) {
+      // A key no UUID can collide with, so a legacy pin keeps its slot in document order.
+      const k = ` legacy${legacy++}`
+      order.push(k)
+      byId.set(k, r)
+      continue
+    }
+    const op = r.op ?? 'pin'
+    if (op === 'pin') {
+      if (!byId.has(r.id)) order.push(r.id)
+      byId.set(r.id, r)
+    } else if (op === 'edit') {
+      const p = byId.get(r.id)
+      if (p) {
+        p.said = r.said
+        p.editedAt = r.at
+      }
+    } else if (op === 'delete') {
+      byId.delete(r.id)
+    }
+  }
+  return order.map((k) => byId.get(k)).filter(Boolean)
+}
+
+const pins = fold(readFileSync(pinFile, 'utf8').split('\n').filter(Boolean))
 
 // ── the theme on disk ────────────────────────────────────────────────────────────────────
 // The page can only see the tokens that are live right now. The file sees both modes, which is
@@ -174,6 +208,12 @@ function locate(classes) {
 
 function decide(prop, r, pin) {
   const blast = r.blast ?? {}
+  // The page said it could not query this selector, so its reach is not 1 node, not 0 — it is
+  // unknown. Every branch below reads a node count that does not exist, and the one this would
+  // otherwise fall through to accuses the rule of being a call-site override. Say nothing instead.
+  if (blast.scope === 'unqueryable') {
+    return { layer: 'UNKNOWN', why: 'the page could not query this selector — nothing is known about what else it reaches' }
+  }
   if (blast.scope === 'inline') {
     return { layer: 'OVERRIDE', why: 'an inline style attribute — never a design decision, always a leak' }
   }
@@ -192,7 +232,7 @@ function decide(prop, r, pin) {
   if (blast.nodes === 1) {
     return {
       layer: 'OVERRIDE',
-      why: 'exactly one node and no component owns it — this is the call-site override SKILL.md:257 forbids. Delete it, add a variant.',
+      why: 'exactly one node and no component owns it — this is the call-site override SKILL.md:278-281 forbids. Delete it, add a variant.',
     }
   }
   return { layer: 'NODE', why: `${blast.nodes} nodes, no data-slot on any of them — no component boundary to hang a variant on` }
@@ -204,17 +244,26 @@ const report = []
 let untokened = 0
 
 for (const [i, pin] of pins.entries()) {
+  // An add pin has no element, so its class list — the handle everything below uses — is the
+  // parent's, and its resolution is the parent's too. Both are context for what to build, never a
+  // verdict on what is there.
+  const add = pin.kind === 'add' ? pin.anchor : null
   const entry = {
+    // `n` is where this pin sits in the report today, and deleting an earlier one moves it. `id` is
+    // what it is called forever, which is why an external reference gets that and not the ordinal.
     n: i + 1,
+    id: pin.id?.slice(0, 6),
+    kind: pin.kind ?? 'critique',
     said: pin.said,
     route: pin.route,
     theme: pin.theme,
     viewport: pin.viewport,
     identity: pin.identity,
+    anchor: pin.anchor,
     classes: pin.classes,
     warnings: [],
     properties: [],
-    source: locate(pin.classes),
+    source: locate(add ? add.parent?.classes : pin.classes),
   }
   if (pin.blockedSheets) {
     entry.warnings.push(
@@ -222,11 +271,17 @@ for (const [i, pin] of pins.entries()) {
     )
   }
   const withTokens = Object.entries(pin.resolved ?? {}).filter(([, r]) => r.tokens?.length)
-  if (!withTokens.length) {
+  // The exit code counts surfaces built with no token system behind them. An add pin is tokenless
+  // by construction — it points at empty space — so counting it would report the tool's own
+  // gesture as a defect in the project.
+  if (!withTokens.length && !add) {
     untokened++
     entry.warnings.push('no property on this element resolved to a token — the value is hard-coded, which is a Phase-1 defect, not a styling request')
   }
-  for (const [prop, r] of Object.entries(pin.resolved ?? {})) {
+  // A layer verdict on an add pin would answer a question nobody asked: the pin is about the gap,
+  // and decide() would file the parent's own background as the defect the user pointed at.
+  for (const [prop, r] of Object.entries(add ? {} : (pin.resolved ?? {}))) {
+
     const d = decide(prop, r, pin)
     entry.properties.push({
       prop,
@@ -237,6 +292,9 @@ for (const [i, pin] of pins.entries()) {
       layer: d.layer,
       why: d.why,
       blast: r.blast,
+      // Pins taken before the resolver learned to tell a hover rule from a resting one carry no
+      // `states` at all. Normalising here is the only place that has to know.
+      states: r.states ?? [],
       tokens: (r.tokens ?? []).map((t) => ({
         ...t,
         onDisk: (byName.get(t.token) ?? []).map((x) => `${x.file}:${x.line} in ${x.block} = ${x.value}`),
@@ -248,7 +306,11 @@ for (const [i, pin] of pins.entries()) {
 }
 
 if (has('json')) {
-  console.log(JSON.stringify({ dir, themeFiles: themeFiles.map((f) => relative(dir, f)), pins: report }, null, 2))
+  // console.log followed by process.exit truncates. A write to a pipe is asynchronous and this
+  // report is well past the 64 KB pipe buffer, so the reader gets a JSON document that stops
+  // mid-string — which looks exactly like the report being malformed. Wait for the drain.
+  const json = `${JSON.stringify({ dir, themeFiles: themeFiles.map((f) => relative(dir, f)), pins: report }, null, 2)}\n`
+  await new Promise((flushed) => process.stdout.write(json, flushed))
   process.exit(untokened)
 }
 
@@ -265,18 +327,41 @@ console.log(D(`  pins:  ${pins.length}\n`))
 
 for (const e of report) {
   const id = e.identity ?? {}
-  console.log(`${B(`── ${e.n}. "${e.said}"`)}`)
-  console.log(
-    D(`   ${id.slot ? `[${id.slot}]` : id.tag}${id.variant ? ` variant=${id.variant}` : ''}${id.text ? `  "${id.text}"` : ''}`),
-  )
+  const a = e.anchor
+  console.log(`${B(`── ${e.n}${e.id ? ` · ${e.id}` : '.'}${a ? '  +' : ''} "${e.said}"`)}`)
+  if (a) {
+    const p = a.parent ?? {}
+    // `before` and `after` are the siblings either side of the gap, so the new element goes AFTER
+    // the one called `before`. Printing those two words the other way round would read as an
+    // instruction, and be the opposite of one.
+    const between = [a.before?.text && `after "${a.before.text}"`, a.after?.text && `before "${a.after.text}"`]
+      .filter(Boolean)
+      .join(', ')
+    const place = a.type === 'append' ? `appended after ${a.childCount} children` : `at index ${a.index} of ${a.childCount}`
+    console.log(
+      `   ${G('ADD'.padEnd(8))} into ${B(p.tag ?? '?')}  ` +
+        D(p.unique ? '(parent unique in document)' : '(parent path matches MORE THAN ONE node — this names a shape, not a place)'),
+    )
+    console.log(D(`            ${place}${between ? ` — ${between}` : ''}`))
+    console.log(D(`            parent: display:${p.display} flex-direction:${p.flexDirection}`))
+    console.log(D(`            ${p.path}`))
+  } else {
+    console.log(
+      D(`   ${id.slot ? `[${id.slot}]` : id.tag}${id.variant ? ` variant=${id.variant}` : ''}${id.text ? `  "${id.text}"` : ''}`),
+    )
+  }
   console.log(D(`   ${e.route} · ${e.theme} · ${e.viewport?.w}×${e.viewport?.h}`))
   for (const w of e.warnings) console.log(`   ${Y('!')} ${w}`)
 
-  const interesting = e.properties.filter((p) => p.tokens.length || p.layer === 'OVERRIDE')
+  // A property whose resting value is untokened but whose hover rule names a token is the most
+  // common shape on a Tailwind page, and it is the answer the pin was taken to get. It has no
+  // tokens of its own and is not an override, so without this clause it never prints.
+  const interesting = e.properties.filter((p) => p.tokens.length || p.states.length || p.layer === 'OVERRIDE')
   for (const p of interesting) {
     const c = layerColor[p.layer] ?? D
     console.log(`   ${c(p.layer.padEnd(8))} ${B(p.prop)}  ${D(p.selector)}${p.context?.length > 1 ? D(` @ ${p.context.slice(1).join(' ')}`) : ''}`)
     console.log(D(`            ${p.why}`))
+    for (const s of p.states) console.log(D(`            :${s.state} → ${s.declared}`))
     for (const t of p.tokens) {
       console.log(`            ${G(t.token)} = ${t.value}`)
       for (const d of t.onDisk) console.log(D(`              ${d}`))
