@@ -496,6 +496,9 @@
       .mark.add { background:var(--s0); color:var(--a);
                   -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
                   box-shadow:0 2px 10px -2px rgba(0,0,0,.5), 0 0 0 1.5px var(--a) }
+      /* Done is greyscale, never struck through and never smaller. Figma's rule, and the reason is
+         that a resolved comment is still the record of why the screen looks the way it does. */
+      .mark.done { background:var(--t2); color:var(--s0) }
       /* Only the pin just taken, and only once. Committing used to be silent — the sentence went to
          a file and the page said nothing back. Half a second of overshoot is the receipt. */
       .mark.new { animation:sd-drop .5s forwards }
@@ -535,8 +538,8 @@
       .list .grp .cnt { font:400 10px var(--mono) }
       .list .grp .go { border:0; background:transparent; padding:0; cursor:pointer;
                        font:600 10px var(--ui); letter-spacing:.07em; color:var(--a) }
-      .list .row { display:flex; gap:9px; align-items:center; margin:0 5px; padding:7px 7px;
-                   border-radius:var(--r-sm); font:13px/1.4 var(--ui);
+      .list .row { position:relative; display:flex; gap:9px; align-items:center; margin:0 5px;
+                   padding:7px 7px; border-radius:var(--r-sm); font:13px/1.4 var(--ui);
                    transition:background var(--fast) }
       .list .row:hover { background:var(--s1) }
       .list .row .n { flex:none; width:18px; height:18px; border-radius:999px 999px 999px 3px;
@@ -546,10 +549,15 @@
       .list .said { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
                     color:var(--t0) }
       .list .row.cold .said { color:var(--t1) }
-      .list .where { flex:none; max-width:44%; overflow:hidden; text-overflow:ellipsis;
+      .list .where { flex:none; max-width:40%; overflow:hidden; text-overflow:ellipsis;
                      white-space:nowrap; font:10px var(--mono); color:var(--t2) }
-      .list .acts { flex:none; display:flex; gap:2px; opacity:0; transition:opacity var(--fast) }
-      .list .row:hover .acts { opacity:1 }
+      /* Out of the flow, not merely transparent. Four buttons at opacity 0 still hold their width,
+         and every one added squeezed the sentence — which is the content — a little further, until
+         a row read "t.." beside a full selector. Absolute keeps the cost at zero until hover. */
+      .list .acts { position:absolute; right:7px; top:50%; transform:translateY(-50%);
+                    display:flex; gap:2px; opacity:0; pointer-events:none;
+                    transition:opacity var(--fast) }
+      .list .row:hover .acts { opacity:1; pointer-events:auto }
       /* The two live in the same slot, so a row never grows on hover and the list never reflows
          under the pointer that is about to click it. */
       .list .row:hover .where { display:none }
@@ -557,6 +565,21 @@
                            cursor:pointer; font:500 11px var(--ui); color:var(--t1) }
       .list .acts button:hover { background:rgba(255,255,255,.09); color:var(--t0) }
       .list .acts button.rm:hover { color:var(--a) }
+      /* The way back to what has been dealt with. One row, at the top, and it is the only place a
+         done pin is countable — the chip counts what is still open. */
+      .list .doneline { display:flex; gap:8px; align-items:center; margin:5px 5px 0; padding:6px 7px;
+                        border-radius:var(--r-sm); cursor:pointer; user-select:none;
+                        font:500 12px/1 var(--ui); color:var(--t1);
+                        transition:background var(--fast) }
+      .list .doneline:hover { background:var(--s1) }
+      .list .doneline .tick { flex:none; width:18px; height:18px; border-radius:999px;
+                              background:var(--t2); color:var(--s0);
+                              font:700 10px/18px var(--ui); text-align:center }
+      .list .doneline .lbl { flex:1 }
+      .list .doneline .act { font:500 11px var(--ui); color:var(--t2) }
+      .list .doneline.open .act { color:var(--a) }
+      .list .row.done .said { color:var(--t2) }
+      .list .row.done .n { background:var(--t2); color:var(--s0) }
       .list .empty { padding:14px 14px 15px; font:12px/1.6 var(--ui); color:var(--t1) }
       .list .empty span { color:var(--t2) }
       kbd { font:500 10px var(--mono); color:var(--t0); background:rgba(255,255,255,.08);
@@ -593,6 +616,8 @@
   let target = null
   let frozen = false
   let editing = null // the id of the pin whose sentence the panel is currently rewriting, or null
+  let reaiming = null // the id of the pin the next commit re-points, or null
+  let showDone = false // whether the list is showing the pins already marked done
   let listOpen = false
   let offline = false
   let lastView = '' // the view key as of the last settled screen change — see onNav
@@ -667,6 +692,7 @@
     frozen = false
     target = null
     editing = null
+    reaiming = null
     anchor = null
     drawStart = null
     head.textContent = 'pin'
@@ -1054,8 +1080,14 @@
       // consumer that has never heard of it, and the two shapes differ exactly here: an add pin
       // has no element to identify — that absence IS what it says — so it carries an anchor and
       // the parent's resolution where a critique pin carries an identity and its own.
-      op: 'pin',
-      id: newId(),
+      //
+      // A re-aim is this same record under a different op and an id that already exists: every
+      // field a pin has about WHERE it is gets recomputed, and the fold keeps the rest. That is
+      // deliberately not a narrower `{id, identity}` patch — the resolution, the box, the screen
+      // and the theme all describe the old element, and a record that updated the selector and
+      // left them would be worse than one that never moved at all.
+      op: reaiming ? 'reanchor' : 'pin',
+      id: reaiming ?? newId(),
       kind: anchor ? 'add' : 'critique',
       said,
       at: new Date().toISOString(),
@@ -1076,7 +1108,12 @@
       box: r ? { x: +r.x.toFixed(1), y: +r.y.toFixed(1), width: +r.width.toFixed(1), height: +r.height.toFixed(1) } : null,
       ...(anchor ? { anchor: where, ...res } : target.__sdRes),
     }
-    pins.push(pin)
+    // The local array is folded the same way the file is: a re-aim replaces the record in place and
+    // keeps its slot, so the number on the marker does not change under a user who was only
+    // correcting where it pointed.
+    const at = pins.findIndex((p) => p.id === pin.id)
+    if (at > -1) pins[at] = { ...pins[at], ...pin, op: 'pin', reanchoredAt: pin.at }
+    else pins.push(pin)
     post(pin, pin)
     input.value = ''
     clear()
@@ -1085,6 +1122,20 @@
     justPinned = pin.id
     render()
     justPinned = null
+  }
+
+  // Done is a filter, never a delete — the one thing both Figma and Vercel do with a resolved
+  // comment, and for the same reason: the sentence is the only record of why the screen looks the
+  // way it does now, so destroying it on the day it stops being a complaint is destroying it at
+  // exactly the wrong moment. `doneAt` rather than `resolved`, because `resolved` in this file is
+  // already the map of properties to the tokens that own them.
+  const setDone = (id, done) => {
+    const rec = pins.find((p) => p.id === id)
+    if (!rec) return
+    const at = new Date().toISOString()
+    rec.doneAt = done ? at : null
+    post({ op: done ? 'done' : 'undone', id, at }, rec)
+    render()
   }
 
   // ── the inventory ──────────────────────────────────────────────────────────────────────
@@ -1161,6 +1212,9 @@
     if (!on) return
     const here = viewKey()
     pins.forEach((p, i) => {
+      // A done pin comes off the screen with the same keystroke it comes out of the list — the
+      // whole value of marking one done is that the page stops carrying it.
+      if (p.doneAt && !showDone) return
       // An add pin has no element — that absence is what it says — but it does name the parent the
       // thing goes into, and that parent is on screen. Marking it is the difference between an add
       // pin existing on the page and existing only in a file. It is drawn hollow, because the one
@@ -1169,7 +1223,11 @@
       if (!node) return
       const r = node.getBoundingClientRect()
       if (r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) return
-      const m = mk('div', `mark${p.anchor ? ' add' : ''}${p.id && p.id === justPinned ? ' new' : ''}`, String(i + 1))
+      const m = mk(
+        'div',
+        `mark${p.anchor ? ' add' : ''}${p.doneAt ? ' done' : ''}${p.id && p.id === justPinned ? ' new' : ''}`,
+        p.doneAt ? '✓' : String(i + 1),
+      )
       m.dataset.id = p.id ?? ''
       // The sharp corner lands on the element's top-left and the body hangs off it, so the marker
       // points at the thing without sitting on top of it. Clamped, because the element at the top
@@ -1211,11 +1269,25 @@
       return
     }
     const here = viewKey()
+    // Done pins leave the list, not the file. The line that says how many is the only way back to
+    // them, and it is at the top rather than the bottom because a list of six open pins that used
+    // to be nine is a different thing to read than one that was always six.
+    const done = pins.filter((p) => p.doneAt)
+    if (done.length) {
+      const dl = mk('li', `doneline${showDone ? ' open' : ''}`)
+      dl.append(mk('span', 'tick', '✓'), mk('span', 'lbl', `${done.length} done`), mk('span', 'act', showDone ? 'hide' : 'show'))
+      list.append(dl)
+    }
     const groups = new Map()
     for (const p of pins) {
+      if (p.doneAt && !showDone) continue
       const key = groupKey(p)
       if (!groups.has(key)) groups.set(key, { route: p.route ?? location.pathname, view: p.view, rows: [] })
       groups.get(key).rows.push(p)
+    }
+    if (!groups.size) {
+      list.append(mk('li', 'empty', 'every pin on this project is done.'))
+      return
     }
     for (const g of groups.values()) {
       const now = g.route === location.pathname && g.view === here
@@ -1245,13 +1317,13 @@
         // on it would report `could not locate`, which reads as the lookup failing rather than as
         // the point of the pin.
         const node = now && !p.anchor ? locateRow(p, here) : null
-        const row = mk('li', `row${node ? '' : ' cold'}`)
+        const row = mk('li', `row${node ? '' : ' cold'}${p.doneAt ? ' done' : ''}`)
         row.dataset.id = p.id ?? ''
         row.title = whereLabel(p)
         row.append(
           // The same number as the marker on the page, which is the whole point of numbering them:
           // a row and a dot that say `3` are one pin seen from two places.
-          mk('span', 'n', String(pins.indexOf(p) + 1)),
+          mk('span', 'n', p.doneAt ? '✓' : String(pins.indexOf(p) + 1)),
           mk('span', 'said', p.said ?? ''),
           // Three distinct refusals, and conflating them is what makes a tool look broken. `could
           // not locate` means we are on the right screen and the path found nothing or found
@@ -1271,7 +1343,15 @@
           ),
         )
         const acts = mk('span', 'acts')
-        acts.append(mk('button', 'ed', 'edit'), mk('button', 'rm', 'del'))
+        // `aim` on every row, not only the cold ones. A pin the tool CAN find is still a pin that
+        // may be on the wrong element — that is the ordinary way to mis-take one — and a verb that
+        // appears only after something has broken is a verb nobody learns.
+        acts.append(
+          mk('button', 'aim', 'aim'),
+          mk('button', 'dn', p.doneAt ? 'undo' : 'done'),
+          mk('button', 'ed', 'edit'),
+          mk('button', 'rm', 'del'),
+        )
         row.append(acts)
         if (node) {
           row.onmouseenter = () => paint(node)
@@ -1308,13 +1388,37 @@
     input.dispatchEvent(new Event('input'))
   }
 
+  // Point an existing pin somewhere else. Until this existed a pin whose element had moved could
+  // only be mourned: the row said `could not locate` and the only verbs were rewrite the sentence
+  // or destroy it, so the sentence — the expensive half — died with the selector. The panel arms
+  // itself and then waits; the next alt-click (or alt+shift+drag, if the pin is an add pin) is the
+  // new target, and committing writes one `reanchor` record naming the same id.
+  const beginReaim = (id) => {
+    const pin = pins.find((p) => p.id === id)
+    if (!pin) return
+    clear()
+    reaiming = id
+    head.textContent = 're-aim'
+    sub.textContent = id.slice(0, 6)
+    commitBtn.textContent = 'move it'
+    why.innerHTML = `<div class="note">${
+      pin.anchor ? 'alt+shift+drag where it belongs now' : 'alt-click the element this is about now'
+    }</div>`
+    panel.style.display = 'block'
+    panel.style.left = `${Math.max(8, innerWidth - 340)}px`
+    panel.style.top = '80px'
+    input.value = pin.said ?? ''
+    input.dispatchEvent(new Event('input'))
+    input.focus()
+  }
+
   // A delete is an appended tombstone, so a mis-delete is a `grep -v` away in pins.jsonl. With the
   // sink down there is nowhere to append it: the row goes from this tab and comes back on reload,
   // which is what `offline` on the chip is there to warn about.
   const del = (id) => {
     const i = pins.findIndex((p) => p.id === id)
     if (i < 0) return
-    if (editing === id) clear()
+    if (editing === id || reaiming === id) clear()
     pins.splice(i, 1)
     post({ op: 'delete', id, at: new Date().toISOString() })
     render()
@@ -1344,15 +1448,17 @@
     // The view count is §2.2 in one glance: more views than routes means the tool can tell two
     // screens apart that location.pathname insists are the same screen.
     const views = new Set(pins.map(groupKey)).size
+    // The count is of pins still open. A number that never goes down is a number nobody reads.
+    const open = pins.filter((p) => !p.doneAt).length
     chip.textContent = ''
     chip.classList.toggle('dim', !on)
     chip.append(
       mk('span', 'dot'),
-      mk('span', 'n', pins.length ? `${pins.length} pin${pins.length === 1 ? '' : 's'}` : 'pin'),
+      mk('span', 'n', open ? `${open} pin${open === 1 ? '' : 's'}` : 'pin'),
       // The hint is the keyboard model, shown where a static count used to be. Nobody reads a
       // console line about a modifier key; the one affordance that is always on screen is the
       // only place the gesture can be taught.
-      mk('span', 'hint', on ? (pins.length ? (views > 1 ? `${views} screens` : 'alt-click') : 'alt-click an element') : 'off'),
+      mk('span', 'hint', on ? (open ? (views > 1 ? `${views} screens` : 'alt-click') : 'alt-click an element') : 'off'),
     )
     if (on && offline) chip.append(mk('span', 'off', 'offline'))
     chip.title = on ? 'the pins so far · alt-click an element to add one' : 'pinning is off · click to turn it back on'
@@ -1396,9 +1502,10 @@
     },
     pins,
     resolve: (el) => resolve(el),
-    // The wire format gained op, id, kind and view at v2 and identity.paths at v3, and
-    // superdesign-pin-contract.md:112 requires the bump on any schema change.
-    version: 3,
+    // The wire format gained op, id, kind and view at v2, identity.paths at v3, and the reanchor /
+    // done / undone ops with the doneAt they fold to at v4. superdesign-pin-contract.md:112
+    // requires the bump on any schema change.
+    version: 4,
     view: () => viewKey(),
   }
 
@@ -1468,12 +1575,22 @@
       location.href = e.target.dataset.route
       return
     }
+    if (e.target.closest?.('.doneline')) {
+      e.preventDefault()
+      e.stopPropagation()
+      showDone = !showDone
+      render()
+      return
+    }
     const row = e.target.closest?.('.row')
     if (!row) return
     e.preventDefault()
     e.stopPropagation()
-    if (e.target.classList.contains('ed')) beginEdit(row.dataset.id)
-    else if (e.target.classList.contains('rm')) del(row.dataset.id)
+    const cls = e.target.classList
+    if (cls.contains('ed')) beginEdit(row.dataset.id)
+    else if (cls.contains('rm')) del(row.dataset.id)
+    else if (cls.contains('aim')) beginReaim(row.dataset.id)
+    else if (cls.contains('dn')) setDone(row.dataset.id, !row.classList.contains('done'))
   })
   // Four free signals and one that costs. The free four cover every navigation that moves the URL;
   // the observer is the only one that fires at all on an app like foji, whose screens are React

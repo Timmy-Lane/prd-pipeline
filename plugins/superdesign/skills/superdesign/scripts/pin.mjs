@@ -154,6 +154,18 @@ const fold = (lines) => {
         p.said = r.said
         p.editedAt = r.at
       }
+    } else if (op === 'reanchor') {
+      // Everything about WHERE, replaced; the sentence and the slot in document order, kept. `op`
+      // is dropped so the folded record still reads as a pin to anything downstream that only ever
+      // knew about pins.
+      const p = byId.get(r.id)
+      if (p) {
+        const { op: _op, id: _id, at, ...rest } = r
+        Object.assign(p, rest, { reanchoredAt: at })
+      }
+    } else if (op === 'done' || op === 'undone') {
+      const p = byId.get(r.id)
+      if (p) p.doneAt = op === 'done' ? r.at : null
     } else if (op === 'delete') {
       byId.delete(r.id)
     }
@@ -314,11 +326,12 @@ const server = createServer((req, res) => {
       // An edit and a delete carry no identity and no resolution, so the pin line would print them
       // as `[?] "" · no token resolved` — three fields of nothing that read like a broken pin.
       const op = pin?.op ?? 'pin'
-      if (op === 'pin') {
+      if (op === 'pin' || op === 'reanchor') {
         const t = pin?.identity?.slot ?? pin?.identity?.tag ?? '?'
         const first = Object.entries(pin?.resolved ?? {}).find(([, r]) => r.tokens?.length)
         const tok = first ? `${first[0]} → ${first[1].tokens[0].token}` : 'no token resolved'
-        console.log(`  ${String(n).padStart(3)}  [${t}] ${JSON.stringify(pin?.said ?? '')}  ·  ${tok}`)
+        const verb = op === 'reanchor' ? `re-aim ${String(pin?.id ?? '?').slice(0, 6)} → ` : ''
+        console.log(`  ${String(n).padStart(3)}  ${verb}[${t}] ${JSON.stringify(pin?.said ?? '')}  ·  ${tok}`)
       } else {
         const said = op === 'edit' ? `  →  ${JSON.stringify(pin?.said ?? '')}` : ''
         console.log(`  ${String(n).padStart(3)}  ${op} ${String(pin?.id ?? '?').slice(0, 6)}${said}`)

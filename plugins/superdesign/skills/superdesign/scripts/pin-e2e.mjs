@@ -96,6 +96,16 @@ const takePin = async (page, sel, text, modifiers = ['Alt']) => {
   return rec
 }
 
+// A row's verbs are absolutely positioned and pointer-events:none until the row is hovered, so an
+// invisible button can never eat a click. A driver that jumps straight to the button therefore
+// fails the actionability check — correctly. Hover first, which is the only way a hand can reach
+// one anyway.
+const rowButton = async (page, id, cls) => {
+  const row = page.locator(`#sd-pin-overlay li.row[data-id="${id}"]`)
+  await row.hover()
+  return row.locator(`button.${cls}`)
+}
+
 // Uncaught exceptions out of the page, which a scenario reads to prove the overlay left the host
 // alone. Not a blanket assertion: foji throws `transformCallback` at load all by itself, its Tauri
 // event streams being un-mocked in a browser. A scenario empties this immediately before the act it
@@ -127,11 +137,13 @@ const scenarios = {
     // Every pin the overlay holds gets a row — the two just taken plus whatever hydration brought
     // back from earlier sessions, which is the point of the list.
     const shown = await page.locator('#sd-pin-overlay li.row').count()
-    const held = await page.evaluate(() => window.__sdPinOverlay.pins.length)
-    if (shown !== held) throw new Error(`the list shows ${shown} rows for ${held} pins`)
+    // The OPEN ones. A pin marked done is still held and still in the file; the list is where it
+    // stops being carried, so counting rows against every pin would fail the moment one is closed.
+    const held = await page.evaluate(() => window.__sdPinOverlay.pins.filter((p) => !p.doneAt).length)
+    if (shown !== held) throw new Error(`the list shows ${shown} rows for ${held} open pins`)
     console.log(`  list  ${shown} rows`)
 
-    await page.locator(`#sd-pin-overlay li.row[data-id="${one}"] button.ed`).click()
+    await (await rowButton(page, one, 'ed')).click()
     const boxEl = page.locator('textarea[placeholder^="what is wrong"]')
     await boxEl.waitFor({ state: 'visible', timeout: 5000 })
     if ((await boxEl.inputValue()) !== 'one') throw new Error('edit opened the panel without the sentence in it')
@@ -139,7 +151,7 @@ const scenarios = {
     await clickAndPost(page, page.locator('button.commit'), 'edit')
     console.log('  edit  "one" → "one edited"')
 
-    await clickAndPost(page, page.locator(`#sd-pin-overlay li.row[data-id="${two}"] button.rm`), 'delete')
+    await clickAndPost(page, await rowButton(page, two, 'rm'), 'delete')
     console.log('  del   "two"')
 
     await page.reload({ waitUntil: 'domcontentloaded' })
@@ -298,6 +310,93 @@ const scenarios = {
         `${JSON.stringify([a.before.text, a.after.text])} · drawn ${a.drawn.width}×${a.drawn.height} · ` +
         `${rec.resolved} parent properties · sink ${res.status()}`,
     )
+  },
+
+  // Closing the loop. Two claims, and both are about what the log says after the tab is gone:
+  // a pin can be re-pointed at a different element without losing its sentence, and a pin can be
+  // marked done, which takes it out of the list without taking it out of the file. Until these
+  // existed a pin could only be edited or destroyed — so a fixed one was either clutter or lost
+  // context, and one whose element had moved could only be mourned.
+  close: async (page) => {
+    const aimed = (await takePin(page, 'h1', 'the wordmark is too big')).id
+    const fixed = (await takePin(page, 'aside button >> nth=2', 'this row is too quiet')).id
+    if (!aimed || !fixed) throw new Error('the overlay minted no id for a pin')
+    const wasPath = await page.evaluate(
+      (id) => window.__sdPinOverlay.pins.find((p) => p.id === id)?.identity?.path ?? null,
+      aimed,
+    )
+
+    await page.locator('#sd-pin-overlay .chip').click()
+
+    // Re-aim. The row's own button arms it; the next alt-click is the new element; commit writes
+    // one `reanchor` record naming the same id.
+    await (await rowButton(page, aimed, 'aim')).click()
+    const boxEl = page.locator('textarea[placeholder^="what is wrong"]')
+    await boxEl.waitFor({ state: 'visible', timeout: 5000 })
+    if ((await boxEl.inputValue()) !== 'the wordmark is too big') {
+      throw new Error('re-aim opened the panel without the sentence it is re-aiming')
+    }
+    // The sidebar, not another heading: what is asserted is that the pin MOVED, and moving it onto
+    // something of the same tag would prove nothing. Which node in the row the pointer lands on is
+    // the app's business — alt-click takes the topmost, so a button whose label is a span pins the
+    // span — so the claim is about the path, not the tag.
+    await page.click('aside button >> nth=3', { modifiers: ['Alt'] })
+    await clickAndPost(page, page.locator('button.commit'), 're-aim')
+    const moved = await page.evaluate(
+      (id) => {
+        const p = window.__sdPinOverlay.pins.find((x) => x.id === id)
+        return { tag: p?.identity?.tag ?? null, path: p?.identity?.path ?? null, said: p?.said ?? null }
+      },
+      aimed,
+    )
+    if (moved.tag === 'h1') throw new Error('re-aim left the pin on the h1 it was pointed away from')
+    if (moved.path === wasPath) throw new Error(`re-aim recorded the same path it started with: ${JSON.stringify(wasPath)}`)
+    if (moved.said !== 'the wordmark is too big') throw new Error(`re-aim ate the sentence: ${JSON.stringify(moved.said)}`)
+    console.log(`  aim   ${aimed.slice(0, 6)} h1 → ${moved.tag} in the sidebar, sentence kept`)
+
+    // Done. The row leaves the list and the count moves to the filter; nothing is deleted.
+    // Relative, never absolute: two runs of this gate append to one pins.jsonl, so the box already
+    // holds whatever the last run closed. What is being asserted is the delta.
+    const rows = () => page.locator('#sd-pin-overlay li.row').count()
+    const doneCount = () => page.evaluate(() => window.__sdPinOverlay.pins.filter((p) => p.doneAt).length)
+    const before = await rows()
+    const wasDone = await doneCount()
+    await clickAndPost(page, await rowButton(page, fixed, 'dn'), 'done')
+    const after = await rows()
+    if (after !== before - 1) throw new Error(`marking one pin done left ${after} rows, not ${before - 1}`)
+    await page.locator('#sd-pin-overlay .doneline').click()
+    const shown = await page.locator('#sd-pin-overlay li.row.done').count()
+    if (shown !== wasDone + 1) throw new Error(`the filter showed ${shown} done rows, not ${wasDone + 1}`)
+    console.log(`  done  ${before} rows → ${after}, filter brings ${shown} back`)
+
+    // The only claim that matters: both survive the tab being thrown away.
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.waitForFunction(() => window.__sdPinOverlay, null, { timeout: 15000 })
+    await page.evaluate(() => window.__sdPinOverlay.hydrated)
+    const folded = await page.evaluate(
+      async ([a, f]) => {
+        const base = window.__sdPinSink ?? 'http://127.0.0.1:7332'
+        const all = await (await fetch(`${base}/__sd_pins`)).json()
+        const A = all.find((p) => p.id === a)
+        const F = all.find((p) => p.id === f)
+        return {
+          aimedTag: A?.identity?.tag ?? null,
+          aimedPath: A?.identity?.path ?? null,
+          aimedSaid: A?.said ?? null,
+          aimedText: A?.identity?.text ?? null,
+          fixedDone: !!F?.doneAt,
+          fixedSaid: F?.said ?? null,
+        }
+      },
+      [aimed, fixed],
+    )
+    if (folded.aimedTag === 'h1' || folded.aimedPath === wasPath) {
+      throw new Error(`after reload the re-aimed pin is back at ${JSON.stringify(folded.aimedPath)}`)
+    }
+    if (folded.aimedSaid !== 'the wordmark is too big') throw new Error(`re-aim ate the sentence: ${JSON.stringify(folded.aimedSaid)}`)
+    if (!folded.fixedDone) throw new Error('after reload the done pin is not done')
+    if (folded.fixedSaid !== 'this row is too quiet') throw new Error('done ate the sentence')
+    console.log(`  fold  re-aimed → <${folded.aimedTag}> ${JSON.stringify(folded.aimedText)} · done pin still says ${JSON.stringify(folded.fixedSaid)}`)
   },
 }
 

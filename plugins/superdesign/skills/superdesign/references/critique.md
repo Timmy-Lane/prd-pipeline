@@ -323,6 +323,22 @@ named siblings, and the box that was drawn. It is the answer to the other half o
 complaint, and it exists because "instead create kanban here" alt-clicked onto the nearest button
 cannot say whether the kanban replaces that button, sits beside it, or goes in the other panel.
 
+**Then close the loop.** The chip opens the inventory, and every row carries four verbs:
+
+| verb | what it writes | why it exists |
+|---|---|---|
+| `aim` | `op:"reanchor"` — the same id, every WHERE field recomputed | the app moved and the pin did not; the sentence is the expensive half and it survives |
+| `done` | `op:"done"` → `doneAt` | the complaint was answered. It leaves the list and the page, never the file |
+| `edit` | `op:"edit"` | the sentence was wrong, the element was not |
+| `del` | `op:"delete"` | it was never a pin |
+
+**Done is a filter, not a delete** — Figma's rule and Vercel's, for the same reason: the sentence
+is the only record of *why* the screen looks the way it does now, so destroying it on the day it
+stops being a complaint destroys it at exactly the wrong moment. `pin-report.mjs` skips done pins
+and its exit code ignores them, so the brief is the queue rather than the history; `--all` gives
+the history. Nothing in `pins.jsonl` is ever rewritten — the file is a log and every verb above is
+one appended record, so a mistake is a `grep -v` away.
+
 **The layer decision — one `querySelectorAll`, not a judgement call:**
 
 | The winning rule reaches | Layer | The edit |

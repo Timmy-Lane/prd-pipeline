@@ -73,6 +73,16 @@ const fold = (lines) => {
         p.said = r.said
         p.editedAt = r.at
       }
+    } else if (op === 'reanchor') {
+      // Everything about WHERE, replaced; the sentence and the slot in document order, kept.
+      const p = byId.get(r.id)
+      if (p) {
+        const { op: _op, id: _id, at, ...rest } = r
+        Object.assign(p, rest, { reanchoredAt: at })
+      }
+    } else if (op === 'done' || op === 'undone') {
+      const p = byId.get(r.id)
+      if (p) p.doneAt = op === 'done' ? r.at : null
     } else if (op === 'delete') {
       byId.delete(r.id)
     }
@@ -80,7 +90,12 @@ const fold = (lines) => {
   return order.map((k) => byId.get(k)).filter(Boolean)
 }
 
-const pins = fold(readFileSync(pinFile, 'utf8').split('\n').filter(Boolean))
+const all = fold(readFileSync(pinFile, 'utf8').split('\n').filter(Boolean))
+// A pin marked done is a complaint that has been answered. Reporting it again is how a brief grows
+// until nobody reads it, and the exit code — the number of pins with no token behind them — would
+// keep failing on work already finished. `--all` when you want the history rather than the queue.
+const done = all.filter((p) => p.doneAt)
+const pins = has('all') ? all : all.filter((p) => !p.doneAt)
 
 // ── the theme on disk ────────────────────────────────────────────────────────────────────
 // The page can only see the tokens that are live right now. The file sees both modes, which is
@@ -323,7 +338,9 @@ const layerColor = { TOKEN: G, VARIANT: Y, OVERRIDE: R, NODE: D }
 
 console.log(`\n${B('pin-report')}  ${relative(process.cwd(), dir) || dir}`)
 console.log(D(`  theme: ${themeFiles.map((f) => relative(dir, f)).join(', ') || 'none found'} (${theme.length} tokens)`))
-console.log(D(`  pins:  ${pins.length}\n`))
+console.log(
+  D(`  pins:  ${pins.length}${done.length ? (has('all') ? ` (${done.length} done, shown)` : ` open · ${done.length} done, hidden — --all`) : ''}\n`),
+)
 
 for (const e of report) {
   const id = e.identity ?? {}
