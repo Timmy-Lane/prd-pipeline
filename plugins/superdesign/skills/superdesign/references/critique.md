@@ -296,12 +296,26 @@ defect (SKILL.md § Phase 2 → "Add a variant, never a call-site override"), so
 produces node patches manufactures the exact slop this file gates. **The layer is decided before the
 fix, mechanically, and never by reading the sentence.**
 
-**Capture with `scripts/pin-overlay.js`.** Alt-click, one sentence, enter. The overlay walks the
-CSSOM rather than `getComputedStyle`, because computed values are the specified value *with `var()`
-already substituted* — by the time you read `oklch(0.542 0.205 27)` the token name is gone. The
-declared value survives in CSSOM and names it exactly. Pins land in `window.__sdPins`, and in
-`.superdesign/pins.jsonl` when `scripts/pin-server.mjs` is up. Read them with
-`node scripts/pin-report.mjs --dir <project>`.
+**One command turns a dev server into a surface you can point at:**
+
+```bash
+node scripts/pin.mjs --dir <project>     # → open the URL it prints, alt-click things
+node scripts/pin-report.mjs --dir <project>
+```
+
+`pin.mjs` probes the usual dev ports, puts itself in front of whichever answers, and injects
+`pin-overlay.js` into every HTML response it proxies — including the websocket, so HMR keeps
+working. **Nothing is installed into the project**: no plugin, no script tag, nothing that could
+reach a production build. Pass `--app <url>` when the port is unusual and `--no-proxy` when the
+project already injects the overlay itself.
+
+**Then alt-click, one sentence, enter.** The overlay walks the CSSOM rather than
+`getComputedStyle`, because computed values are the specified value *with `var()` already
+substituted* — by the time you read `oklch(0.542 0.205 27)` the token name is gone. The declared
+value survives in CSSOM and names it exactly. A pin leaves a numbered marker on its element;
+the ring is the accent when a token owns the pixel and amber when nothing does, which is the layer
+decision below made visible before the sentence is even typed. Pins land in `window.__sdPins` and
+in `<project>/.superdesign/pins.jsonl`.
 
 **Alt+shift+drag instead where an element is missing.** That pin (`kind: "add"`) names no element,
 because there is not one yet: it names the parent that would hold it, the index between which two

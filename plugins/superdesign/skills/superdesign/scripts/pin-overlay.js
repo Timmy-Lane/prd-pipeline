@@ -17,12 +17,19 @@
 // every click-to-source tool built on `_debugSource` broke and React shipped no replacement.
 // This one never needed it.
 //
-//   Delivery A (nothing to install):  paste into devtools, or have the agent inject it.
-//   Delivery B (survives reloads):    node scripts/pin-server.mjs, then add to the dev page
-//                                     <script src="http://127.0.0.1:7332/pin-overlay.js"></script>
+//   Delivery A (nothing at all):   paste into devtools, or have the agent inject it.
+//   Delivery B (one command):      node scripts/pin.mjs --dir <project>. It finds the dev server,
+//                                  proxies it, and injects this file into every page it serves —
+//                                  so a project gets pinning without a plugin, a script tag, or a
+//                                  single line of its own changed.
 //
 // Alt-click an element. Type one sentence. Enter. Pins land in window.__sdPins and, when the
 // sink is up, in .superdesign/pins.jsonl. Read them with scripts/pin-report.mjs.
+//
+// A pin taken leaves a numbered marker on the element, the way a comment does in Figma or in
+// Vercel's toolbar: the question a second pass actually asks is "what have I already said about
+// this screen", and a tool whose only answer is a file cannot be asked it while looking at the
+// screen. Hover a marker for the sentence; click it to rewrite it.
 //
 // Click the corner chip for everything pinned so far, grouped by the screen it was taken on: hover
 // a row to light its element up again, edit the sentence, delete it. That list is hydrated from
@@ -48,9 +55,11 @@
     return
   }
 
-  // The sink is wherever the overlay was served from — pin-server stamps `__sdPinSink` on the
-  // copy it hands out, so a non-default `--port` can never leave the page posting into a dead
-  // one. The literal is only the fallback for Delivery A, where nobody served anything.
+  // The sink is wherever the overlay was served from — pin.mjs stamps `__sdPinSink` on the copy it
+  // hands out (empty when the page is coming through its own proxy, so the two share an origin and
+  // CORS never enters into it), which is what keeps a non-default `--port` from leaving the page
+  // posting into a dead one. The literal is only the fallback for Delivery A, where nobody served
+  // anything.
   const SINK = `${window.__sdPinSink ?? 'http://127.0.0.1:7332'}/__sd_pin`
   // The same sink, read side. It answers with the FOLD over pins.jsonl — deletes applied, edits
   // applied, resolutions stripped — so the overlay never has to know the file is a log.
@@ -295,7 +304,31 @@
       ariaLabel: el.getAttribute('aria-label'),
       text: (el.textContent ?? '').trim().slice(0, 80) || null,
       path: domPath(el),
+      paths: candidates(el),
     }
+  }
+
+  // One selector is one bet. `domPath` is positional — six tags and nth-of-type — so a card moving
+  // from third to second child breaks it, and every pin taken before that edit reads `could not
+  // locate` forever. Vercel's toolbar stores FOUR validated selectors per comment for exactly this
+  // reason. These are ordered by how much a re-render can move them: an id or a test id survives a
+  // reorder, a class list survives a reorder but not a restyle, the path survives a restyle but not
+  // a reorder. locateRow takes the first that resolves to exactly one node.
+  const esc = (s) => (typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(s) : s)
+  const candidates = (el) => {
+    const tag = el.tagName.toLowerCase()
+    const out = []
+    if (el.id) out.push(`#${esc(el.id)}`)
+    if (el.dataset.testid) out.push(`[data-testid="${esc(el.dataset.testid)}"]`)
+    if (el.dataset.sdLoc) out.push(`[data-sd-loc="${esc(el.dataset.sdLoc)}"]`)
+    const aria = el.getAttribute('aria-label')
+    if (aria) out.push(`${tag}[aria-label="${aria.replace(/["\\]/g, '\\$&')}"]`)
+    out.push(domPath(el))
+    const cls = (typeof el.className === 'string' ? el.className : '').trim().split(/\s+/).filter(Boolean)
+    // Tailwind class names are full of `:`, `/` and `[]`, none of which are legal bare in a
+    // selector — CSS.escape is the only correct way to spell one back.
+    if (cls.length) out.push(tag + cls.map((c) => `.${esc(c)}`).join(''))
+    return [...new Set(out)]
   }
 
   function domPath(el) {
@@ -324,70 +357,218 @@
   const shadow = host.attachShadow({ mode: 'open' })
   shadow.innerHTML = `
     <style>
-      :host { all: initial }
-      .box { position:fixed; border:2px solid ${ACCENT}; pointer-events:none; display:none;
-             box-shadow:0 0 0 9999px rgba(0,0,0,.25); border-radius:1px }
-      .tag { position:fixed; font:600 11px ui-monospace,SFMono-Regular,monospace; color:#fff;
-             background:${ACCENT}; padding:2px 6px; white-space:nowrap; pointer-events:none;
-             display:none; border-radius:1px }
+      /* Every colour, radius, duration and font in this file is one of these. A literal below this
+         block is a bug: onlook ships two reds, two purples and two type scales because its tokens
+         live in three files, and a single-file overlay has no excuse for the same. */
+      :host {
+        all: initial;
+        --a: ${ACCENT};                    /* the accent. It means "the pin tool", nothing else */
+        --a-soft: rgba(255,45,85,.18);
+        --warn: #f5a524;                   /* a pixel no token owns — see paint() */
+        --s0: rgba(15,15,18,.84);          /* the floating surface, over its own blur */
+        --s1: rgba(255,255,255,.055);      /* a row under the pointer */
+        --line: rgba(255,255,255,.10);     /* hairline. 1px reads as a frame; .5px reads as an edge */
+        --t0: #f5f5f7; --t1: #a3a3ad; --t2: #66666f;
+        --r: 11px; --r-sm: 6px;
+        --ui: system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+        --mono: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+        /* Two rings, then the shadow. A single hairline can only be right against one kind of app:
+           the light one vanishes on a white page and the dark one vanishes on a black one, and this
+           overlay is injected into whatever the user happens to be building. Vercel's toolbar draws
+           both for the same reason. */
+        --shadow: 0 0 0 .5px rgba(0,0,0,.55), 0 18px 44px -14px rgba(0,0,0,.7),
+                  0 3px 10px -3px rgba(0,0,0,.45);
+        --fast: 150ms cubic-bezier(.4,0,.2,1);   /* a state changed */
+        --move: 300ms cubic-bezier(.4,0,.2,1);   /* something moved */
+      }
+
+      /* Every count in this file is tabular, so a badge does not jitter as it counts up — the one
+         thing that makes a number in a chip look hand-built. */
+      .mark, .list .n, .list .cnt, .panel .count { font-variant-numeric:tabular-nums }
+
+      /* One surface recipe, three users. The blur is what stops a dark slab over a light app from
+         reading as a modal — it stays a thing ON the page rather than a thing INSTEAD of it. */
+      .panel, .list, .chip {
+        background:var(--s0); border:.5px solid var(--line); border-radius:var(--r);
+        box-shadow:var(--shadow); color:var(--t0); font-family:var(--ui);
+        -webkit-backdrop-filter:blur(20px) saturate(1.6); backdrop-filter:blur(20px) saturate(1.6);
+      }
+
+      /* The ring. An outline, not a border: a border is laid out INSIDE the width we just measured,
+         so a 2px one shrinks the rect it is supposed to be describing by 4px. And no scrim — the
+         old box-shadow:0 0 0 9999px dimmed the entire app to point at one element, which is the
+         single thing that made this tool read as a debug tool. onlook never dims anything. */
+      .box { position:fixed; display:none; pointer-events:none; border-radius:1px;
+             outline:1px solid var(--a); transition:outline-color var(--fast) }
+      .box.sel { outline-width:2px }
+      .box.untokened { outline-color:var(--warn) }
+      .box.draw { outline:1.5px dashed var(--a); background:var(--a-soft) }
+
+      .tag { position:fixed; display:none; pointer-events:none; white-space:nowrap;
+             font:500 11px/1 var(--ui); color:#fff; background:var(--a);
+             padding:4px 7px; border-radius:var(--r-sm);
+             box-shadow:0 2px 8px -2px rgba(0,0,0,.5) }
+      .tag .dim { font:400 10px var(--mono); opacity:.66; margin-left:6px }
+      .tag.untokened { background:var(--warn); color:#1c1400 }
+
       /* Above the list: the list is a place to look, the panel is a place to type, and the one
          you are typing into is never the one that gets covered. */
-      .panel { position:fixed; z-index:1; pointer-events:auto; display:none; width:340px;
-               background:#0b0b0c; color:#f4f4f5; border:1px solid #2a2a2e; border-radius:2px;
-               font:13px/1.45 ui-sans-serif,system-ui,sans-serif; box-shadow:0 12px 40px rgba(0,0,0,.5) }
-      .panel header { padding:8px 10px; border-bottom:1px solid #2a2a2e;
-                      font:600 11px ui-monospace,monospace; color:#a1a1aa; letter-spacing:.02em }
-      .panel .why { padding:8px 10px; border-bottom:1px solid #2a2a2e; max-height:150px;
-                    overflow:auto; font:11px/1.5 ui-monospace,monospace; color:#d4d4d8 }
-      .panel .why b { color:#fff; font-weight:600 }
-      .panel .why .tok { color:${ACCENT} }
-      .panel .why .anchor { color:#fff; margin-bottom:6px }
-      .panel textarea { width:100%; box-sizing:border-box; border:0; background:transparent;
-                        color:inherit; font:inherit; padding:10px; resize:none; outline:none }
-      .panel footer { padding:6px 10px; border-top:1px solid #2a2a2e;
-                      font:10px ui-monospace,monospace; color:#71717a; display:flex;
-                      justify-content:space-between; align-items:center; gap:8px }
-      .panel footer button { font:600 10px ui-monospace,monospace; color:#fff; background:${ACCENT};
-                             border:0; padding:4px 10px; border-radius:2px; cursor:pointer }
-      .chip { position:fixed; right:12px; bottom:12px; pointer-events:auto;
-              background:${ACCENT}; color:#fff; font:600 11px ui-monospace,monospace;
-              padding:5px 9px; border-radius:2px; cursor:pointer; user-select:none }
-      .warn { color:#fbbf24 }
+      .panel { position:fixed; z-index:3; pointer-events:auto; display:none; width:322px;
+               overflow:hidden }
+      .panel header { display:flex; align-items:center; gap:8px; padding:10px 12px 9px }
+      .panel header .dot { flex:none; width:7px; height:7px; border-radius:99px; background:var(--a) }
+      .panel header .ttl { font:600 12px/1 var(--ui); color:var(--t0) }
+      .panel header .sub { margin-left:auto; font:400 10px var(--mono); color:var(--t2) }
 
-      /* The inventory. Same width as the panel and anchored to the same corner as the chip that
-         opens it, because the panel already sits wherever the user is pointing and a second slab
-         in the middle of the screen would cover the thing every row is about. */
-      .list { position:fixed; right:12px; bottom:38px; width:340px; max-height:min(52vh,420px);
-              overflow:auto; pointer-events:auto; display:none; margin:0; padding:0;
-              list-style:none; background:#0b0b0c; color:#f4f4f5; border:1px solid #2a2a2e;
-              border-radius:2px; box-shadow:0 12px 40px rgba(0,0,0,.5) }
-      .list .grp { position:sticky; top:0; display:flex; gap:6px; align-items:baseline;
-                   padding:6px 10px 4px; background:#0b0b0c; border-top:1px solid #2a2a2e;
-                   font:600 10px ui-monospace,monospace; color:#71717a; letter-spacing:.02em }
-      .list .grp:first-child { border-top:0 }
-      .list .grp .vk { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-      .list .grp.now .vk { color:${ACCENT} }
+      /* The resolved half. Wonder sets its property panel in the UI sans and reserves mono for the
+         value — the label is prose, the value is code — and that one split is most of why a panel
+         of numbers reads as designed rather than dumped. */
+      .panel .why { padding:0 12px 2px; max-height:184px; overflow:auto }
+      .panel .why .tk { display:grid; grid-template-columns:auto 1fr; gap:1px 10px;
+                        padding:7px 0; border-top:.5px solid var(--line) }
+      .panel .why .tk:first-child { border-top:0 }
+      .panel .why .p { font:400 11px/1.4 var(--ui); color:var(--t2); white-space:nowrap }
+      .panel .why .v { font:500 11px/1.4 var(--mono); color:var(--t0);
+                       overflow:hidden; text-overflow:ellipsis }
+      .panel .why .v b { color:var(--a); font-weight:600 }
+      .panel .why .b { grid-column:2; font:400 10px/1.4 var(--ui); color:var(--t2) }
+      .panel .why .sib { grid-column:2; font:400 10px/1.4 var(--mono); color:var(--warn) }
+      .panel .why .note { padding:7px 0; border-top:.5px solid var(--line);
+                          font:400 11px/1.45 var(--ui); color:var(--t2) }
+      .panel .why .anchor { padding:8px 0 7px; font:500 12px/1.4 var(--ui); color:var(--t0) }
+      .panel .why .warn { color:var(--warn) }
+
+      .panel textarea { display:block; width:100%; box-sizing:border-box; border:0;
+                        border-top:.5px solid var(--line); background:transparent; color:var(--t0);
+                        font:13px/1.5 var(--ui); padding:11px 12px; resize:none; outline:none;
+                        caret-color:var(--a) }
+      .panel textarea::placeholder { color:var(--t2) }
+      .panel textarea::selection { background:var(--a-soft); color:#fff }
+
+      .panel footer { display:flex; align-items:center; gap:10px; padding:9px 12px 10px;
+                      border-top:.5px solid var(--line) }
+      .panel footer .count { font:400 10px var(--mono); color:var(--t2) }
+      .panel footer .kb { margin-left:auto; font:400 10px var(--ui); color:var(--t2) }
+      .panel footer button { flex:none; font:600 11px var(--ui); color:#fff; background:var(--a);
+                             border:0; padding:6px 11px; border-radius:var(--r-sm); cursor:pointer;
+                             opacity:.32; transition:opacity var(--fast), transform var(--fast) }
+      /* Quiet until there is a sentence to send. onlook dissolves the button out of the DOM at four
+         characters; keeping it present and merely dim is the same signal without a layout jump — and
+         without a driver having to know the threshold before it can click. */
+      .panel footer button.ready { opacity:1 }
+      .panel footer button:active { transform:scale(.97) }
+
+      /* The launcher. It is the only part of this tool visible when nothing is happening, so it is
+         the whole first impression: a status pill, not a debug badge. */
+      .chip { position:fixed; right:14px; bottom:14px; z-index:2; pointer-events:auto; display:none;
+              align-items:center; gap:8px; padding:7px 12px 7px 10px; border-radius:999px;
+              cursor:pointer; user-select:none; font:500 12px/1 var(--ui);
+              transition:transform var(--fast), border-color var(--fast) }
+      .chip:hover { transform:translateY(-1px); border-color:rgba(255,255,255,.2) }
+      .chip .dot { flex:none; width:7px; height:7px; border-radius:99px; background:var(--a);
+                   box-shadow:0 0 0 3px var(--a-soft) }
+      .chip .hint { color:var(--t2); font-size:11px }
+      .chip .off { color:var(--warn) }
+      /* Off is a state, not an absence. Hiding the chip on toggle-off left the only way back a
+         keystroke the user had to have memorised — the tool disappeared and took its own handle
+         with it. */
+      .chip.dim { color:var(--t1) }
+      .chip.dim .dot { background:var(--t2); box-shadow:none }
+
+      /* Where a pin already is. Nothing in the old overlay survived the commit — the sentence went
+         to a file and the page forgot it, so the one question a reviewer actually asks ("what have
+         I already said about this screen?") could only be answered by opening a list. Every tool
+         that does this well leaves a marker on the thing. */
+      .marks { position:fixed; inset:0; z-index:1; pointer-events:none }
+      /* Three round corners and one sharp one, and the sharp one is the anchor — a comment pin has
+         read that way since Figma, and it costs a border-radius instead of an SVG. The body hangs
+         up and left of the corner it names, so it points at the element without covering it, and
+         the transform-origin keeps that point nailed while the rest of it grows on hover. */
+      .mark { position:absolute; pointer-events:auto; width:22px; height:22px;
+              border-radius:50% 50% 2px 50%; transform-origin:bottom right;
+              background:var(--a); color:#fff; font:700 11px/22px var(--ui); text-align:center;
+              cursor:pointer;
+              /* a white hairline, not a dark one: the marker has to survive a dark app too, and
+                 Vercel's toolbar rings every bubble in white for exactly that reason */
+              box-shadow:0 2px 10px -2px rgba(0,0,0,.5), 0 0 0 1.5px rgba(255,255,255,.92);
+              transition:transform var(--fast) }
+      .mark:hover { transform:scale(1.14) }
+      .mark.add { background:var(--s0); color:var(--a);
+                  -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+                  box-shadow:0 2px 10px -2px rgba(0,0,0,.5), 0 0 0 1.5px var(--a) }
+      /* Only the pin just taken, and only once. Committing used to be silent — the sentence went to
+         a file and the page said nothing back. Half a second of overshoot is the receipt. */
+      .mark.new { animation:sd-drop .5s forwards }
+      @keyframes sd-drop {
+        0%   { opacity:0; transform:scale(.4) }
+        30%  { opacity:1; transform:scale(1.16) }
+        45%  { transform:scale(.94) }
+        60%,100% { opacity:1; transform:scale(1) }
+      }
+
+      /* What the marker says when you point at it. A native title= takes a second to appear and is
+         drawn by the OS in a font nothing here chose; this is the sentence, immediately. */
+      .tip { position:fixed; z-index:4; display:none; pointer-events:none; max-width:264px;
+             padding:8px 10px; border-radius:var(--r-sm); background:var(--s0);
+             border:.5px solid var(--line); box-shadow:var(--shadow);
+             -webkit-backdrop-filter:blur(20px) saturate(1.6);
+             backdrop-filter:blur(20px) saturate(1.6);
+             font:12px/1.45 var(--ui); color:var(--t0) }
+
+      /* Scrolling is the one thing a fixed overlay cannot follow without a frame loop. onlook does
+         not try: it drops every rect the instant a wheel moves and fades them back once the page
+         settles. A tracking loop that is 16ms behind looks broken; a deliberate blink does not. */
+      :host(.scrolling) .box, :host(.scrolling) .tag, :host(.scrolling) .marks {
+        opacity:0; transition:none }
+      .box, .tag, .marks { transition:opacity var(--fast) }
+
+      .list { position:fixed; right:14px; bottom:56px; z-index:2; width:344px;
+              max-height:min(56vh,460px); overflow:auto; pointer-events:auto; display:none;
+              margin:0; padding:0 0 5px; list-style:none }
+      .list .grp { position:sticky; top:0; z-index:1; display:flex; gap:8px; align-items:center;
+                   padding:9px 12px 6px; background:var(--s0);
+                   font:600 10px var(--ui); letter-spacing:.07em; text-transform:uppercase;
+                   color:var(--t2) }
+      .list .grp .vk { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+                       text-transform:none; letter-spacing:0; font:400 10px var(--mono) }
+      .list .grp.now .rt { color:var(--a) }
+      .list .grp .cnt { font:400 10px var(--mono) }
       .list .grp .go { border:0; background:transparent; padding:0; cursor:pointer;
-                       font:600 10px ui-monospace,monospace; color:${ACCENT} }
-      .list .row { display:flex; gap:8px; align-items:baseline; padding:4px 10px;
-                   font:11px/1.5 ui-sans-serif,system-ui,sans-serif }
-      .list .row:hover { background:#141416 }
-      .list .row.cold { color:#71717a }
-      .list .said { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-      .list .where { max-width:42%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-                     font:10px ui-monospace,monospace; color:#52525b }
-      .list .acts { display:flex; gap:6px; opacity:0 }
+                       font:600 10px var(--ui); letter-spacing:.07em; color:var(--a) }
+      .list .row { display:flex; gap:9px; align-items:center; margin:0 5px; padding:7px 7px;
+                   border-radius:var(--r-sm); font:13px/1.4 var(--ui);
+                   transition:background var(--fast) }
+      .list .row:hover { background:var(--s1) }
+      .list .row .n { flex:none; width:18px; height:18px; border-radius:999px 999px 999px 3px;
+                      background:var(--a); color:#fff; font:700 10px/18px var(--ui);
+                      text-align:center }
+      .list .row.cold .n { background:var(--t2) }
+      .list .said { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+                    color:var(--t0) }
+      .list .row.cold .said { color:var(--t1) }
+      .list .where { flex:none; max-width:44%; overflow:hidden; text-overflow:ellipsis;
+                     white-space:nowrap; font:10px var(--mono); color:var(--t2) }
+      .list .acts { flex:none; display:flex; gap:2px; opacity:0; transition:opacity var(--fast) }
       .list .row:hover .acts { opacity:1 }
-      .list .acts button { border:0; background:transparent; padding:0; cursor:pointer;
-                           font:10px ui-monospace,monospace; color:#71717a }
-      .list .acts button:hover { color:${ACCENT} }
-      .list .empty { padding:10px; font:10px ui-monospace,monospace; color:#52525b }
+      /* The two live in the same slot, so a row never grows on hover and the list never reflows
+         under the pointer that is about to click it. */
+      .list .row:hover .where { display:none }
+      .list .acts button { border:0; background:transparent; padding:3px 6px; border-radius:4px;
+                           cursor:pointer; font:500 11px var(--ui); color:var(--t1) }
+      .list .acts button:hover { background:rgba(255,255,255,.09); color:var(--t0) }
+      .list .acts button.rm:hover { color:var(--a) }
+      .list .empty { padding:14px 14px 15px; font:12px/1.6 var(--ui); color:var(--t1) }
+      .list .empty span { color:var(--t2) }
+      kbd { font:500 10px var(--mono); color:var(--t0); background:rgba(255,255,255,.08);
+            border:.5px solid var(--line); border-radius:4px; padding:2px 5px }
     </style>
-    <div class="box"></div><div class="tag"></div>
+    <div class="marks"></div>
+    <div class="box"></div><div class="tag"></div><div class="tip"></div>
     <div class="panel">
-      <header>pin</header><div class="why"></div>
-      <textarea rows="2" placeholder="what is wrong with this?  ⏎ to pin, esc to cancel"></textarea>
-      <footer><span class="count"></span><button class="commit">pin it ⏎</button></footer>
+      <header><span class="dot"></span><span class="ttl">pin</span><span class="sub"></span></header>
+      <div class="why"></div>
+      <textarea rows="2" placeholder="what is wrong with this?"></textarea>
+      <footer><span class="count"></span><span class="kb">⏎ to pin · esc</span><button class="commit">pin it</button></footer>
     </div>
     <ol class="list"></ol>
     <div class="chip"></div>`
@@ -396,12 +577,15 @@
   const box = $('.box')
   const tag = $('.tag')
   const panel = $('.panel')
-  const head = $('.panel header')
+  const head = $('.panel .ttl')
+  const sub = $('.panel .sub')
   const why = $('.why')
   const input = $('textarea')
   const commitBtn = $('.commit')
   const list = $('.list')
   const chip = $('.chip')
+  const marks = $('.marks')
+  const tip = $('.tip')
 
   let on = false
   let stack = []
@@ -412,6 +596,7 @@
   let listOpen = false
   let offline = false
   let lastView = '' // the view key as of the last settled screen change — see onNav
+  let justPinned = null // the id whose marker still owes the user an animation, or null
   let navT = 0
   let anchor = null // where an element the user drew is missing FROM, or null — see resolveAnchor
   let drawStart = null // the viewport point an alt+shift drag began at, while one is in flight
@@ -423,8 +608,12 @@
   // plus class list is the key. Measured on foji: five screens, five distinct keys, one URL.
   const viewKey = () => {
     const A = innerWidth * innerHeight
-    let n = document.elementFromPoint(innerWidth >> 1, innerHeight >> 1)
-    while (n && (n === host || host.contains(n))) n = n.parentElement // never key on our own host
+    // elementsFromPoint, not elementFromPoint: anything inside a shadow root is reported as its
+    // HOST, so an open compose panel over the middle of the screen made the single-element form
+    // return our own host — and climbing to its parent lands on <html>, which is 100% of the
+    // viewport and therefore always wins. Two pins taken seconds apart then filed under two
+    // different screens. The stack has the app's element underneath; take that one.
+    let n = document.elementsFromPoint(innerWidth >> 1, innerHeight >> 1).find((e) => e !== host && !host.contains(e))
     for (; n && n.nodeType === 1; n = n.parentElement) {
       const r = n.getBoundingClientRect()
       if (r.width * r.height >= A * 0.6) {
@@ -435,19 +624,45 @@
     return 'none'
   }
 
-  const paint = (el) => {
+  // What to call the thing being pointed at. onlook's rule, which is better than printing the tag
+  // forever: a heading or a paragraph IS its text, so the tag name says nothing a reader wanted.
+  const nameOf = (el, id) => {
+    if (id.slot) return `[${id.slot}]`
+    if (/^(h[1-6]|p|li|label|button|a)$/.test(id.tag)) {
+      const t = (el.textContent ?? '').trim().replace(/\s+/g, ' ')
+      if (t) return t.length > 26 ? `${t.slice(0, 26)}…` : t
+    }
+    return id.tag
+  }
+
+  // `sel` is the committed state — the element the panel is about — where a bare paint is the
+  // pointer passing over. One number apart on purpose: two visual languages for hover and select
+  // would say they are two different things, and they are the same thing a moment later.
+  const paint = (el, { sel = false, untokened = false } = {}) => {
     const r = el.getBoundingClientRect()
     box.style.cssText += `;display:block;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px`
-    tag.style.display = 'block'
-    tag.style.left = `${r.left}px`
-    tag.style.top = `${Math.max(0, r.top - 20)}px`
+    box.classList.toggle('sel', sel)
+    box.classList.toggle('untokened', untokened)
+    box.classList.remove('draw')
+    tag.classList.toggle('untokened', untokened)
     const id = identify(el)
-    tag.textContent = `${id.slot ? `[${id.slot}]` : id.tag}${id.variant ? ` ${id.variant}` : ''}  ${Math.round(r.width)}×${Math.round(r.height)}`
+    tag.textContent = ''
+    tag.append(nameOf(el, id) + (id.variant ? ` ${id.variant}` : ''), mk('span', 'dim', `${Math.round(r.width)}×${Math.round(r.height)}`))
+    // Show, then measure: the label is as wide as whatever it ended up saying, and a guessed width
+    // is what puts it off the right edge on the one element whose name is long.
+    tag.style.display = 'block'
+    const tr = tag.getBoundingClientRect()
+    tag.style.left = `${Math.min(Math.max(2, r.left), Math.max(2, innerWidth - tr.width - 2))}px`
+    // Above by default, below when there is no room above — the same flip the panel makes, for the
+    // same reason: the label of the topmost element on a page is exactly the one that needs it.
+    tag.style.top = `${r.top - tr.height - 4 >= 2 ? r.top - tr.height - 4 : r.bottom + 4}px`
   }
 
   const clear = () => {
     box.style.display = 'none'
+    box.className = 'box'
     tag.style.display = 'none'
+    tag.className = 'tag'
     panel.style.display = 'none'
     frozen = false
     target = null
@@ -455,29 +670,36 @@
     anchor = null
     drawStart = null
     head.textContent = 'pin'
-    commitBtn.textContent = 'pin it ⏎'
+    sub.textContent = ''
+    commitBtn.textContent = 'pin it'
+    commitBtn.classList.remove('ready')
   }
 
   // Hovering a list row lights up the element that row names. Letting go has to put back whatever
   // was on screen before it, because a frozen panel is a sentence the user is halfway through and
   // moving its box out from under him is the tool getting in the way.
   const restore = () => {
-    if (frozen && target) paint(target)
+    if (frozen && target) paint(target, { sel: true, untokened: !target.__sdRes?.tokenCount })
     else {
       box.style.display = 'none'
       tag.style.display = 'none'
     }
   }
 
+  // One row per resolved property: the property name set as prose, the token and its value set as
+  // code. Wonder's properties panel is the reference — a label column in the UI sans and a value
+  // column in mono is most of the difference between a panel of numbers that reads as designed and
+  // one that reads as a console dump.
   const summarize = (res) => {
     const rows = []
     for (const [prop, r] of Object.entries(res.resolved)) {
       if (!r.tokens.length) continue
       for (const t of r.tokens) {
         rows.push(
-          `<div><b>${prop}</b> → <span class="tok">${t.token}</span> = ${t.value || '?'}` +
-            `  <span style="color:#71717a">(${r.blast.scope}, ${r.blast.nodes} nodes)</span>` +
-            (t.siblings.length ? `<br><span class="warn">  ↳ same value: ${t.siblings.join(', ')}</span>` : '') +
+          `<div class="tk"><span class="p">${prop}</span>` +
+            `<span class="v"><b>${t.token}</b> ${t.value || '?'}</span>` +
+            `<span class="b">${r.blast.scope} · ${r.blast.nodes} node${r.blast.nodes === 1 ? '' : 's'}</span>` +
+            (t.siblings.length ? `<span class="sib">same value: ${t.siblings.join(', ')}</span>` : '') +
             `</div>`,
         )
       }
@@ -485,19 +707,19 @@
     const untokened = Object.entries(res.resolved)
       .filter(([, r]) => !r.tokens.length && !r.plumbing?.length)
       .map(([p]) => p)
-    if (untokened.length) rows.push(`<div class="warn">no token: ${untokened.join(', ')}</div>`)
+    if (untokened.length) rows.push(`<div class="note warn">no token owns ${untokened.join(', ')} — this pin is a one-off unless the system grows one</div>`)
     const plumbed = Object.entries(res.resolved).filter(([, r]) => !r.tokens.length && r.plumbing?.length)
     if (plumbed.length) {
       rows.push(
-        `<div style="color:#52525b">${plumbed.length} propert${plumbed.length === 1 ? 'y' : 'ies'} carry only Tailwind's internal --tw-* slots (${plumbed.map(([p]) => p).join(', ')}) — plumbing, not design</div>`,
+        `<div class="note">${plumbed.length} propert${plumbed.length === 1 ? 'y' : 'ies'} carry only Tailwind's internal --tw-* slots (${plumbed.map(([p]) => p).join(', ')}) — plumbing, not design</div>`,
       )
     }
     if (res.blockedSheets) {
       rows.unshift(
-        `<div class="warn"><b>${res.blockedSheets} stylesheet(s) unreadable</b> — cross-origin or file://. Serve over http://localhost.</div>`,
+        `<div class="note warn">${res.blockedSheets} stylesheet(s) unreadable — cross-origin or file://. Serve over http://localhost.</div>`,
       )
     }
-    return rows.join('') || '<div class="warn">nothing resolved</div>'
+    return rows.join('') || '<div class="note warn">nothing resolved</div>'
   }
 
   // Put the panel beside a rectangle — the element being critiqued, or the parent an add pin is
@@ -505,7 +727,7 @@
   // clips the textarea off the bottom of the viewport exactly when the thing pinned sits low.
   const openPanel = (r) => {
     panel.style.display = 'block'
-    panel.style.left = `${Math.min(Math.max(8, r.left), Math.max(8, innerWidth - 348))}px`
+    panel.style.left = `${Math.min(Math.max(8, r.left), Math.max(8, innerWidth - 330))}px`
     panel.style.top = '0px'
     const h = panel.getBoundingClientRect().height
     const below = r.bottom + 8
@@ -519,8 +741,12 @@
     // Pointing at an element that exists retires an anchor for one that does not. Two answers to
     // "what is this pin about" cannot both be live, and the later gesture is the one meant.
     anchor = null
-    paint(el)
     const res = resolve(el)
+    // Resolve before painting, because the ring's colour is the answer. onlook spends hue on
+    // "component instance or plain DOM"; the only distinction that changes what happens next here
+    // is whether a token owns the pixel — accent means the fix has a layer, amber means it does not
+    // and the pin is asking for a system that is not there yet.
+    paint(el, { sel: true, untokened: !res.tokenCount })
     why.innerHTML = summarize(res)
     target.__sdRes = res
     $('.count').textContent = `${res.matchedRules} rules · ${res.tokenCount} tokens`
@@ -643,6 +869,9 @@
       const l = Math.min(drawStart.x, e.clientX)
       const t = Math.min(drawStart.y, e.clientY)
       box.style.cssText += `;display:block;left:${l}px;top:${t}px;width:${Math.abs(e.clientX - drawStart.x)}px;height:${Math.abs(e.clientY - drawStart.y)}px`
+      // Dashed and filled while it is being drawn, because what is inside it is not an element yet
+      // — a solid ring around empty space claims something is there.
+      box.className = 'box draw'
       tag.style.display = 'none'
       return
     }
@@ -697,8 +926,9 @@
     // The box moves onto the PARENT rather than staying on what was drawn. The drawn rectangle is
     // already in the record; the one thing the user cannot otherwise see is which container the
     // resolution decided to put the element in, and that is the half he can still correct.
-    paint(anchor.el)
-    tag.textContent = `+ into ${anchor.parent.tag}${anchor.index == null ? '' : `  ${anchor.index}/${anchor.childCount}`}`
+    paint(anchor.el, { sel: true })
+    tag.textContent = ''
+    tag.append(`+ into ${anchor.parent.tag}`, mk('span', 'dim', anchor.index == null ? 'append' : `${anchor.index}/${anchor.childCount}`))
     why.innerHTML = summarize(anchor.res)
     // mk, so the neighbours' text is set as text. It comes off the host page, and the why-block is
     // the one place in this file that assigns innerHTML.
@@ -716,7 +946,8 @@
     )
     $('.count').textContent = `${anchor.res.matchedRules} rules · ${anchor.res.tokenCount} tokens`
     head.textContent = 'add'
-    commitBtn.textContent = 'add it ⏎'
+    sub.textContent = `<${anchor.parent.tag}>`
+    commitBtn.textContent = 'add it'
     openPanel(anchor.el.getBoundingClientRect())
   }
 
@@ -735,14 +966,27 @@
   }
 
   const onKey = (e) => {
+    // This handler is bound twice on purpose — window capture, and the shadow root, because a
+    // keystroke aimed at the textarea only reaches the first of those depending on how it was
+    // dispatched. The same event object arrives at both, so anything that STEPS rather than sets
+    // ran twice: one Escape used to clear the pin AND then turn the whole tool off.
+    if (e.__sd) return
+    e.__sd = true
     if (e.altKey && e.shiftKey && (e.key === 'P' || e.key === 'p')) {
       e.preventDefault()
       api.toggle()
       return
     }
     if (!on) return
+    // One key, walked outward: throw away the pin being taken, then the list, then the tool. Figma
+    // makes Escape leave comment mode and so does this — but not before it has undone the thing the
+    // user was most likely trying to undo.
     if (e.key === 'Escape') {
-      clear()
+      if (frozen || target || anchor || editing) clear()
+      else if (listOpen) {
+        listOpen = false
+        render()
+      } else api.toggle()
       return
     }
     if (frozen && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
@@ -836,7 +1080,11 @@
     post(pin, pin)
     input.value = ''
     clear()
+    // One animation, on the one marker that just appeared. Consumed by the render it triggers, so a
+    // later re-render — a scroll settling, a screen change — does not replay it.
+    justPinned = pin.id
     render()
+    justPinned = null
   }
 
   // ── the inventory ──────────────────────────────────────────────────────────────────────
@@ -846,9 +1094,37 @@
   // element as readily as the right one. One node or nothing — never highlight on a maybe.
   const locateRow = (pin, here = viewKey()) => {
     if (pin.view && pin.view !== here) return null
+    const want = (pin.identity?.text ?? '').trim()
+    // Every candidate in turn, each still held to one-node-or-nothing. A pin taken before this
+    // existed carries only `path`, and that is the whole of its list.
+    for (const sel of pin.identity?.paths ?? [pin.identity?.path]) {
+      if (!sel) continue
+      let n = []
+      try {
+        n = [...document.querySelectorAll(sel)]
+      } catch {
+        continue
+      }
+      if (n.length === 1) return n[0]
+      // Several matches is not a maybe when the pin recorded what the element said. Four cards
+      // sharing one class list are told apart by their text, and the text is already in the record.
+      if (n.length > 1 && want) {
+        const byText = n.filter((e) => (e.textContent ?? '').trim().slice(0, 80) === want)
+        if (byText.length === 1) return byText[0]
+      }
+    }
+    return null
+  }
+
+  // The same refusal, for the container an add pin was filed against. `unique` was already decided
+  // when the pin was taken (resolveAnchor); re-checking it here is what keeps a path that has since
+  // come to match three nodes from lighting up the first of them as if it were the one.
+  const locateParent = (pin, here = viewKey()) => {
+    if (pin.view && pin.view !== here) return null
+    if (!pin.anchor?.parent?.unique) return null
     let n = []
     try {
-      n = [...document.querySelectorAll(pin.identity?.path ?? '')]
+      n = [...document.querySelectorAll(pin.anchor.parent.path ?? '')]
     } catch {
       return null
     }
@@ -874,12 +1150,64 @@
     return `${id.slot ? `[${id.slot}]` : (id.tag ?? '?')}${id.text ? ` "${id.text.slice(0, 24)}"` : ''}`
   }
 
+  // ── the markers ────────────────────────────────────────────────────────────────────────
+  // A pin that leaves nothing behind on the page is a pin the user has to remember taking. Every
+  // tool that does this well — Figma, Vercel's toolbar — drops a marker on the thing and leaves it
+  // there, and the question it answers is the one actually asked on a second pass: what have I
+  // already said about this screen? Only pins whose element can still be found get one; the rest
+  // are in the list, where "not on this screen" is a sentence rather than a dot in the wrong place.
+  const placeMarks = () => {
+    marks.textContent = ''
+    if (!on) return
+    const here = viewKey()
+    pins.forEach((p, i) => {
+      // An add pin has no element — that absence is what it says — but it does name the parent the
+      // thing goes into, and that parent is on screen. Marking it is the difference between an add
+      // pin existing on the page and existing only in a file. It is drawn hollow, because the one
+      // thing it must not claim is that something is already there.
+      const node = p.anchor ? locateParent(p, here) : locateRow(p, here)
+      if (!node) return
+      const r = node.getBoundingClientRect()
+      if (r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) return
+      const m = mk('div', `mark${p.anchor ? ' add' : ''}${p.id && p.id === justPinned ? ' new' : ''}`, String(i + 1))
+      m.dataset.id = p.id ?? ''
+      // The sharp corner lands on the element's top-left and the body hangs off it, so the marker
+      // points at the thing without sitting on top of it. Clamped, because the element at the top
+      // of a page is exactly the one whose marker would otherwise be off-screen.
+      m.style.left = `${Math.max(2, Math.min(r.left - 22, innerWidth - 24))}px`
+      m.style.top = `${Math.max(2, r.top - 22)}px`
+      m.onmouseenter = () => {
+        paint(node)
+        tip.textContent = p.said ?? ''
+        tip.style.display = 'block'
+        const tr = tip.getBoundingClientRect()
+        tip.style.left = `${Math.min(Math.max(6, r.left - 22), innerWidth - tr.width - 6)}px`
+        tip.style.top = `${r.top - 22 - tr.height - 6 >= 6 ? r.top - 22 - tr.height - 6 : r.top + 6}px`
+      }
+      m.onmouseleave = () => {
+        tip.style.display = 'none'
+        restore()
+      }
+      marks.append(m)
+    })
+  }
+
   // Grouped by the screen the pin was taken on, because a sentence about a screen means nothing
   // beside a screen it is not about, and on a state-routed app half the rows always are.
   const renderList = () => {
     list.textContent = ''
     if (!pins.length) {
-      list.append(mk('li', 'empty', 'no pins yet — alt-click an element'))
+      const e = mk('li', 'empty')
+      e.append(
+        mk('kbd', null, 'alt'),
+        ' + click an element to say what is wrong with it.',
+        mk('br'),
+        mk('kbd', null, 'alt'),
+        ' + ',
+        mk('kbd', null, 'shift'),
+        ' + drag where one is missing.',
+      )
+      list.append(e)
       return
     }
     const here = viewKey()
@@ -893,7 +1221,14 @@
       const now = g.route === location.pathname && g.view === here
       const h = mk('li', `grp${now ? ' now' : ''}`)
       h.title = `${g.route} · ${g.view ?? 'view not recorded'}`
-      h.append(mk('span', 'rt', g.route), mk('span', 'vk', g.view ?? 'view not recorded'), mk('span', 'cnt', String(g.rows.length)))
+      // The route is the wrong headline for an app that has one. What a reader wants first is
+      // whether these rows are about what he is looking at; the route only earns the slot when it
+      // is the thing that differs. The view key stays, in mono, as the detail that proves it.
+      h.append(
+        mk('span', 'rt', now ? 'this screen' : g.route !== location.pathname ? g.route : 'another screen'),
+        mk('span', 'vk', g.view ?? 'view not recorded'),
+        mk('span', 'cnt', String(g.rows.length)),
+      )
       // The one screen change the overlay can actually make, and only ever to a route a pin was
       // already taken on — this is not a route list, it is the pins' own. A hard navigation rather
       // than pushState, deliberately: the overlay knows nothing about the app's router and a tool
@@ -914,6 +1249,9 @@
         row.dataset.id = p.id ?? ''
         row.title = whereLabel(p)
         row.append(
+          // The same number as the marker on the page, which is the whole point of numbering them:
+          // a row and a dot that say `3` are one pin seen from two places.
+          mk('span', 'n', String(pins.indexOf(p) + 1)),
           mk('span', 'said', p.said ?? ''),
           // Three distinct refusals, and conflating them is what makes a tool look broken. `could
           // not locate` means we are on the right screen and the path found nothing or found
@@ -949,8 +1287,8 @@
     if (!pin) return
     editing = id
     frozen = true
-    head.textContent = `edit · ${id.slice(0, 6)}`
-    commitBtn.textContent = 'save ⏎'
+    head.textContent = 'edit'
+    commitBtn.textContent = 'save'
     const node = locateRow(pin)
     if (node) {
       // The full selection, resolution included: the panel is about to ask what is wrong with this
@@ -959,13 +1297,15 @@
     } else {
       // Nothing on this screen to point the panel at, so it goes beside the list rather than
       // hovering over an element that is not the one being talked about.
-      why.innerHTML = '<div style="color:#71717a">not on this screen — editing the sentence only</div>'
+      why.innerHTML = '<div class="note">not on this screen — editing the sentence only</div>'
       panel.style.display = 'block'
-      panel.style.left = `${Math.max(8, innerWidth - 360)}px`
+      panel.style.left = `${Math.max(8, innerWidth - 340)}px`
       panel.style.top = '80px'
       input.focus()
     }
+    sub.textContent = id.slice(0, 6)
     input.value = pin.said ?? ''
+    input.dispatchEvent(new Event('input'))
   }
 
   // A delete is an appended tombstone, so a mis-delete is a `grep -v` away in pins.jsonl. With the
@@ -1004,13 +1344,23 @@
     // The view count is §2.2 in one glance: more views than routes means the tool can tell two
     // screens apart that location.pathname insists are the same screen.
     const views = new Set(pins.map(groupKey)).size
-    chip.textContent = on
-      ? `pin · ${pins.length}` + (views ? ` · ${views} view${views === 1 ? '' : 's'}` : '') + (offline ? ' · offline' : '')
-      : ''
-    chip.style.display = on ? 'block' : 'none'
+    chip.textContent = ''
+    chip.classList.toggle('dim', !on)
+    chip.append(
+      mk('span', 'dot'),
+      mk('span', 'n', pins.length ? `${pins.length} pin${pins.length === 1 ? '' : 's'}` : 'pin'),
+      // The hint is the keyboard model, shown where a static count used to be. Nobody reads a
+      // console line about a modifier key; the one affordance that is always on screen is the
+      // only place the gesture can be taught.
+      mk('span', 'hint', on ? (pins.length ? (views > 1 ? `${views} screens` : 'alt-click') : 'alt-click an element') : 'off'),
+    )
+    if (on && offline) chip.append(mk('span', 'off', 'offline'))
+    chip.title = on ? 'the pins so far · alt-click an element to add one' : 'pinning is off · click to turn it back on'
+    chip.style.display = 'flex'
     if (!on) listOpen = false
     list.style.display = on && listOpen ? 'block' : 'none'
     if (on && listOpen) renderList()
+    placeMarks()
   }
 
   // Every navigation signal converges here. A screen change is a burst, not an event — measured on
@@ -1046,11 +1396,45 @@
     },
     pins,
     resolve: (el) => resolve(el),
-    // The wire format gained op, id, kind and view, and superdesign-pin-contract.md:112 requires
-    // the bump on any schema change.
-    version: 2,
+    // The wire format gained op, id, kind and view at v2 and identity.paths at v3, and
+    // superdesign-pin-contract.md:112 requires the bump on any schema change.
+    version: 3,
     view: () => viewKey(),
   }
+
+  // Scroll and resize are the two things a fixed overlay cannot follow without a frame loop, and a
+  // rect that is one frame behind the page reads as the tool being broken. onlook does not chase:
+  // it drops every rect the instant a wheel turns and fades them back once the page settles. A
+  // deliberate blink is legible; lag is not. Passive, because none of this ever cancels a scroll.
+  let settle = 0
+  const onScroll = () => {
+    host.classList.add('scrolling')
+    clearTimeout(settle)
+    settle = setTimeout(() => {
+      host.classList.remove('scrolling')
+      if (frozen && target?.isConnected) paint(target, { sel: true, untokened: !target.__sdRes?.tokenCount })
+      else if (!frozen) {
+        box.style.display = 'none'
+        tag.style.display = 'none'
+      }
+      placeMarks()
+    }, 150)
+  }
+  addEventListener('scroll', onScroll, { capture: true, passive: true })
+  addEventListener('wheel', onScroll, { passive: true })
+  addEventListener('resize', onScroll, { passive: true })
+
+  marks.addEventListener('click', (e) => {
+    const m = e.target.closest?.('.mark')
+    if (!m) return
+    e.preventDefault()
+    e.stopPropagation()
+    beginEdit(m.dataset.id)
+  })
+
+  // The button is dim until there is a sentence to send. Toggling a class on input rather than
+  // computing it at open time is what makes it right after a paste, an undo, or a driver's fill.
+  input.addEventListener('input', () => commitBtn.classList.toggle('ready', input.value.trim().length > 0))
 
   addEventListener('mousemove', onMove, true)
   addEventListener('mousedown', onDown, true)
@@ -1067,10 +1451,13 @@
     e.stopPropagation()
     commit()
   })
-  chip.title = 'the pins so far · alt-click an element to add one'
   chip.addEventListener('click', (e) => {
     e.preventDefault()
     e.stopPropagation()
+    if (!on) {
+      api.toggle()
+      return
+    }
     listOpen = !listOpen
     render()
   })
@@ -1112,8 +1499,8 @@
   api.hydrated = hydrate()
 
   console.log(
-    '%cpin-overlay%c ready — alt-click an element · alt+shift+P toggles · window.__sdPins',
-    `background:${ACCENT};color:#fff;padding:2px 6px;border-radius:2px;font-weight:600`,
-    '',
+    '%c pin %c alt-click an element · alt+shift+drag where one is missing · alt+shift+P toggles',
+    `background:${ACCENT};color:#fff;padding:2px 7px;border-radius:999px;font-weight:700`,
+    'color:#8a8a94',
   )
 })()

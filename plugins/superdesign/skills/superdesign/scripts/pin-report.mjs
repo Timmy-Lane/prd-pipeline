@@ -36,14 +36,14 @@ const pinFile = arg('pins', join(dir, '.superdesign', 'pins.jsonl'))
 
 if (!existsSync(pinFile)) {
   console.error(`pin-report: no pins at ${pinFile}`)
-  console.error(`  run: node scripts/pin-server.mjs --dir ${dir}`)
+  console.error(`  run: node scripts/pin.mjs --dir ${dir}`)
   process.exit(1)
 }
 
 // pins.jsonl is an append-only log: an edit and a delete are new records carrying the same `id`,
 // never a rewrite of an earlier line. So the current set of pins is a fold over the file, and a
 // reader that does not fold reports pins the user deleted. A record with no `id` predates the log
-// format and folds through unchanged. The same fold lives in pin-server.mjs's GET /__sd_pins —
+// format and folds through unchanged. The same fold lives in pin.mjs's GET /__sd_pins —
 // two consumers, ~14 lines each; a third is when it becomes a module.
 const fold = (lines) => {
   const order = []

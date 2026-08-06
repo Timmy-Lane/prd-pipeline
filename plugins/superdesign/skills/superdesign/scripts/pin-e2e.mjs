@@ -47,7 +47,7 @@ const clickAndPost = async (page, locator, what) => {
     .catch(() => null)
   await locator.click()
   const res = await posted
-  if (!res) throw new Error(`${what}: the sink never answered POST /__sd_pin — is pin-server.mjs still running?`)
+  if (!res) throw new Error(`${what}: the sink never answered POST /__sd_pin — is pin.mjs still running?`)
   if (res.status() >= 300) throw new Error(`${what}: the sink rejected it — HTTP ${res.status()}`)
   return res
 }
@@ -185,12 +185,20 @@ const scenarios = {
     const first = await takePin(page, 'h1', 'the wordmark is too big')
 
     // A frozen panel, deliberately left half-typed on an element the coming screen change unmounts.
-    await page.click('button.card >> nth=0', { modifiers: ['Alt'] })
+    // The LAST card, not the first: foji's three cards now share one rect, so nth=0 is covered by
+    // its own siblings and Playwright waits ten seconds for a click that can never land. Any of the
+    // three proves the claim — the one on top is the only one that can be clicked at all.
+    await page.click('button.card >> nth=-1', { modifiers: ['Alt'] })
     await page.locator('textarea[placeholder^="what is wrong"]').waitFor({ state: 'visible', timeout: 5000 })
 
-    // A plain click on the sidebar's Workspaces row. No pushState, no popstate, no hashchange, no
+    // A plain click on the sidebar's Kanban row. No pushState, no popstate, no hashchange, no
     // URL: React swaps the main pane and the MutationObserver is the only thing that ever hears.
-    await page.locator('aside button').filter({ hasText: 'Workspaces' }).first().click()
+    //
+    // The label is foji's, and foji renames its sidebar — this row was Workspaces until it wasn't,
+    // and a row that no longer exists fails as a ten-second click timeout that reads like the
+    // overlay having broken. When that happens, re-derive it rather than guessing: click each
+    // `aside button` on a fresh load and keep the one after which `__sdPinOverlay.view()` differs.
+    await page.locator('aside button').filter({ hasText: 'Kanban' }).first().click()
     try {
       await panel.waitFor({ state: 'hidden', timeout: 5000 })
     } catch {
@@ -316,7 +324,7 @@ try {
   } catch {
     throw new Error(
       `window.__sdPinOverlay never appeared at ${url}. The page fetches the overlay from the sink, ` +
-        'so this is almost always the sink being down: node scripts/pin-server.mjs --dir <project>',
+        'so this is almost always the sink being down: node scripts/pin.mjs --dir <project>',
     )
   }
   const version = await page.evaluate(() => window.__sdPinOverlay.version)
