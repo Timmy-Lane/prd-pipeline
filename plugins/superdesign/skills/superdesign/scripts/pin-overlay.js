@@ -915,7 +915,22 @@
         row.title = whereLabel(p)
         row.append(
           mk('span', 'said', p.said ?? ''),
-          mk('span', 'where', node || p.anchor ? whereLabel(p) : now ? 'could not locate' : 'not on this screen'),
+          // Three distinct refusals, and conflating them is what makes a tool look broken. `could
+          // not locate` means we are on the right screen and the path found nothing or found
+          // several. `no screen recorded` means the pin predates view keys, so there is nothing to
+          // compare and the path alone would happily light the wrong element — this app reuses
+          // `aside > button:nth-of-type(3)` on every screen it has.
+          mk(
+            'span',
+            'where',
+            node || p.anchor
+              ? whereLabel(p)
+              : now
+                ? 'could not locate'
+                : g.view === undefined
+                  ? 'no screen recorded'
+                  : 'not on this screen',
+          ),
         )
         const acts = mk('span', 'acts')
         acts.append(mk('button', 'ed', 'edit'), mk('button', 'rm', 'del'))
