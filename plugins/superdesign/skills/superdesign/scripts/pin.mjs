@@ -62,7 +62,42 @@ mkdirSync(outDir, { recursive: true })
 
 // The ports a dev server actually listens on, most-likely first. Probing beats asking: the one
 // thing the user reliably does not want to type is the port of a server he already has running.
-const CANDIDATES = [5173, 3000, 1420, 4321, 5174, 4200, 8080, 3001, 8000, 5000]
+const DEFAULTS = [5173, 3000, 1420, 4321, 5174, 4200, 8080, 3001, 8000, 5000]
+
+// But probing the defaults ALONE fronts whichever project answers first, which on a machine with
+// two dev servers up is a coin toss — run from foji, whose Vite is pinned to 1420, and the sweep
+// hands you the Next app on 3000 with foji's name on the pins file. So ask the project first: the
+// port is almost always written down in it, and a config that says `port: 1420` outranks any
+// guess. Deliberately a grep and not a parser — these files are TypeScript, JSON and shell, and
+// the only thing wanted from them is a number.
+const PORT_PATTERNS = [/\bport\s*[:=]\s*["']?(\d{2,5})/gi, /--port[= ](\d{2,5})/g, /(?:localhost|127\.0\.0\.1):(\d{2,5})/g]
+const CONFIGS = [
+  'vite.config.ts', 'vite.config.js', 'vite.config.mjs', 'vite.config.mts',
+  'astro.config.ts', 'astro.config.mjs', 'svelte.config.js', 'nuxt.config.ts',
+  'src-tauri/tauri.conf.json', 'package.json', '.env', '.env.local', '.env.development',
+]
+const declaredPorts = () => {
+  const found = []
+  for (const f of CONFIGS) {
+    let text = ''
+    try {
+      text = readFileSync(join(targetDir, f), 'utf8')
+    } catch {
+      continue
+    }
+    for (const re of PORT_PATTERNS) {
+      for (const m of text.matchAll(re)) {
+        const n = Number(m[1])
+        // 1024 up, and never our own: a config naming 7332 would have us proxy ourselves.
+        if (n > 1023 && n < 65536 && n !== port && !found.includes(n)) found.push(n)
+      }
+    }
+  }
+  return found
+}
+
+const DECLARED = declaredPorts()
+const CANDIDATES = [...DECLARED, ...DEFAULTS.filter((p) => !DECLARED.includes(p))]
 
 // Named from what the HTML admits to. Only ever printed — nothing branches on it — so a wrong
 // guess costs a word, not a behaviour.
@@ -79,9 +114,16 @@ const flavour = (html) =>
 
 // `localhost`, never the 127.0.0.1 literal: Vite binds ::1 only, so half the dev servers this is
 // meant to find answer on IPv6 and nothing else. Node resolves both families off the name.
+//
+// The timeout is generous on purpose and costs nothing: a port with nothing on it refuses the
+// connection immediately, so this only ever waits on a server that ACCEPTED and is thinking. A
+// Vite that has just been started is exactly that — its first request pays for dependency
+// optimisation and can take well over a second — and 400ms here meant that starting the dev server
+// and running this in the same breath reported "no dev server answered" about a server that was
+// right there.
 const probe = (p) =>
   new Promise((done) => {
-    const req = httpRequest({ host: 'localhost', port: p, path: '/', method: 'GET', timeout: 400 }, (res) => {
+    const req = httpRequest({ host: 'localhost', port: p, path: '/', method: 'GET', timeout: 2500 }, (res) => {
       const ct = res.headers['content-type'] ?? ''
       if (!ct.includes('text/html')) {
         res.resume()
@@ -111,12 +153,12 @@ const findApp = async () => {
   const explicit = arg('app', null)
   if (explicit) {
     const u = new URL(explicit.includes('://') ? explicit : `http://${explicit}`)
-    return { port: Number(u.port || 80), flavour: 'http', host: u.hostname }
+    return { port: Number(u.port || 80), flavour: 'http', host: u.hostname, why: 'as given' }
   }
   for (const p of CANDIDATES) {
     if (p === port) continue // never front ourselves
     const hit = await probe(p)
-    if (hit) return { ...hit, host: 'localhost' }
+    if (hit) return { ...hit, host: 'localhost', why: DECLARED.includes(p) ? 'from this project' : 'found by probe' }
   }
   return null
 }
@@ -388,11 +430,27 @@ const openBrowser = (url) => {
 
 app = has('no-proxy') ? null : await findApp()
 
+// A pin left running by an earlier session is the most likely thing on this port, and an unhandled
+// EADDRINUSE prints a Node stack trace at somebody whose only crime was starting the tool twice.
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`\n  pin: something is already listening on 127.0.0.1:${port}.`)
+    console.error(`  It is probably a pin from an earlier session. Stop it:\n`)
+    console.error(`      pkill -f pin.mjs\n`)
+    console.error(`  or run this one somewhere else with --port <n>.\n`)
+    process.exit(1)
+  }
+  console.error(`pin: ${e.message}`)
+  process.exit(1)
+})
+
 server.listen(port, '127.0.0.1', () => {
   const url = `http://127.0.0.1:${port}`
   console.log(`\n  superdesign pin\n`)
   if (app) {
-    console.log(`  app     http://${app.host}:${app.port}  (${app.flavour})`)
+    // Say WHY this one. A port the project itself declares is a fact; a port that merely answered
+    // is a guess, and the user is the only one who can tell which app is his.
+    console.log(`  app     http://${app.host}:${app.port}  (${app.flavour}, ${app.why})`)
     console.log(`  open →  ${url}`)
   } else if (has('no-proxy')) {
     console.log(`  overlay ${url}/pin-overlay.js  —  add it to the dev page yourself`)
