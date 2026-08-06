@@ -32,7 +32,10 @@
     return
   }
 
-  const SINK = 'http://127.0.0.1:7332/__sd_pin'
+  // The sink is wherever the overlay was served from — pin-server stamps `__sdPinSink` on the
+  // copy it hands out, so a non-default `--port` can never leave the page posting into a dead
+  // one. The literal is only the fallback for Delivery A, where nobody served anything.
+  const SINK = `${window.__sdPinSink ?? 'http://127.0.0.1:7332'}/__sd_pin`
   const ACCENT = '#ff2d55'
 
   // Properties worth resolving. Everything a design complaint is ever actually about; anything

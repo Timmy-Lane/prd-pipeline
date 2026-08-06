@@ -79,7 +79,9 @@ const server = createServer((req, res) => {
 
   if (req.method === 'GET' && req.url.startsWith('/pin-overlay.js')) {
     res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
-    res.end(readFileSync(overlayPath))
+    // Tell the overlay where to post. Without this it falls back to the 7332 literal, and any run
+    // started with --port silently drops every pin into a closed socket.
+    res.end(`window.__sdPinSink='http://127.0.0.1:${port}';\n${readFileSync(overlayPath)}`)
     return
   }
 
